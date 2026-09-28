@@ -989,7 +989,7 @@
     document.getElementById('themeMenu').classList.toggle('open');
   }
   function setTheme(theme) {
-    try { localStorage.setItem('nw_theme', theme); } catch (e) {}
+    save('nw_theme', theme);
     applyTheme(theme);
     document.getElementById('themeMenu').classList.remove('open');
   }
