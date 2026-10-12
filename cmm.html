@@ -100,13 +100,17 @@
   .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; }
   .muted { color: var(--ink-soft); }
   .busy { opacity: .6; pointer-events: none; }
+  td.ngv { color: var(--ng); font-weight: 700; background: var(--ng-bg); }
+  td.num { font-variant-numeric: tabular-nums; }
+  details { margin-top: 10px; }
+  summary { cursor: pointer; font-weight: 600; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
     <h1>3차원 성적서 변환</h1>
-    <p>3차원 측정 성적서의 <b>Actual</b> 값을 KER · MTG · 넥스원 성적서 양식의 Actual 칸에 같은 행 위치로 넣어줍니다. 양식의 수식·그림·서식은 그대로 두고 값만 바꿉니다. 파일은 이 브라우저 안에서만 처리됩니다.</p>
+    <p>3차원 측정 성적서를 KER · MTG · 넥스원 성적서 양식에 넣어줍니다. ① Actual 값을 양식의 Actual 칸에 같은 행 위치로 붙여넣고, ② <b>&lt;3&gt;</b>, <b>&lt;12-17&gt;</b> 같은 번호 표시를 보고 같은 번호 항목의 측정치 칸을 채웁니다. 여러 개소는 최소값 · 최대값 두 가지만 적습니다. 양식의 그림 · 서식은 그대로 두고, 파일은 이 브라우저 안에서만 처리됩니다.</p>
   </header>
 
   <section>
@@ -129,6 +133,8 @@
   <section>
     <h2><span class="step">3</span>엑셀 만들기</h2>
     <div class="row">
+      <label class="chk"><input type="checkbox" id="fillItems" checked>번호 표시(&lt;3&gt;, &lt;12-1&gt;)로 측정치 칸 채우기</label>
+      <label class="chk">최소~최대를 한 칸에 적을 때 소수 <input type="number" id="decimals" min="0" max="6" value="2" style="width:56px">자리</label>
       <label class="chk"><input type="checkbox" id="clearUnused" checked>이번에 넣지 않는 시료 칸의 이전 데이터 지우기</label>
     </div>
     <div class="tbl-wrap" id="planInfo"></div>
@@ -138,7 +144,7 @@
     </div>
     <div class="msg" id="msg"></div>
   </section>
-  <p class="hint">다른 회사 양식처럼 Actual 칸이 없는 양식은 <a href="cmm-mapping.html">직접 매핑 도구</a>를 쓰세요.</p>
+  <p class="hint">Actual 칸이 없는 다른 회사 양식은 <a href="cmm-mapping.html">직접 매핑 도구</a>를 쓰세요.</p>
 </div>
 
 <script>
@@ -147,8 +153,8 @@ const $ = id => document.getElementById(id);
 const NS_MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main';
 
 const state = {
-  tpl: null,       // { name, zip, sheets: [{name, path, hdrRow, cols:[], refs:[{row,col}], lastRow}] }
-  srcs: [],        // [{file, partNo, partName, date, inspector, hdrRow, actualCol, values: Map(row→v), lastRow, items, ng, sheet, slot}]
+  tpl: null,   // { name, zip, sheets: [{ name, path, hdrRow, cols, refs, lastRow, blocks }] }
+  srcs: [],    // [{ file, partNo, ..., hdrRow, values: Map(row→v), tags: Map(item→[{loc,row,value}]), sheet, slot }]
 };
 
 // ---------- 공통 ----------
@@ -157,6 +163,7 @@ function numToCol(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = S
 function esc(s) { return String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
 function norm(s) { return String(s ?? '').replace(/\s+/g, '').trim(); }
 function isNum(v) { return typeof v === 'number' && isFinite(v); }
+function fmt(v) { return isNum(v) ? String(+v.toFixed(6)) : String(v ?? ''); }
 function setMsg(t, cls) { const m = $('msg'); m.textContent = t; m.className = 'msg ' + (cls || ''); }
 function bindDrop(dropId, inputId, fn) {
   const d = $(dropId), inp = $(inputId);
@@ -173,6 +180,23 @@ function vendorOf(sh) {
   if (first === 'AE' && n === 10) return '넥스원';
   if (first === 'AG' && n === 1) return 'MTG';
   return '';
+}
+// 기준치 글자에서 숫자: "54.0", "Ø4.5, 14구멍", "R2.0" → 4X R3.0 같은 개수 표기는 건너뜀
+function parseNominal(t) {
+  if (isNum(t)) return t;
+  const s = String(t ?? '').replace(/[()]/g, '').trim();
+  if (/^[+-]?\d+(\.\d+)?$/.test(s)) return +s;
+  const m = s.match(/(?:Ø|∅|φ|R)\s*(\d+(?:\.\d+)?)/);
+  return m ? +m[1] : null;
+}
+// 공차: "±0.1", "+0.05\n0", "0\n-0.1", "-0.02\n-0.05", "±1.0˚"
+function parseTol(t) {
+  const s = String(t ?? '').replace(/[˚°]/g, '');
+  let m = s.match(/±\s*(\d+(?:\.\d+)?)/);
+  if (m) return { up: +m[1], lo: -m[1] };
+  const nums = [...s.matchAll(/[+-]?\d+(?:\.\d+)?/g)].map(x => +x[0]);
+  if (nums.length >= 2) return { up: Math.max(nums[0], nums[1]), lo: Math.min(nums[0], nums[1]) };
+  return null;
 }
 
 // ---------- 1. 양식 읽기 ----------
@@ -202,12 +226,11 @@ async function loadTemplate(files) {
     state.srcs.forEach(s => { s.sheet = null; s.slot = null; });
     assignSheets();
     renderTemplate(); renderSources(); renderPlan();
-    setMsg('');
   } catch (e) {
     console.error(e); setMsg('양식 파일을 읽지 못했습니다: ' + e.message, 'err');
   } finally { document.body.classList.remove('busy'); }
 }
-function decodeXml(s) { return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&amp;/g, '&'); }
+function decodeXml(s) { return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&#(\d+);/g, (_, n) => String.fromCharCode(+n)).replace(/&#x([0-9a-f]+);/gi, (_, n) => String.fromCharCode(parseInt(n, 16))).replace(/&amp;/g, '&'); }
 async function readSharedStrings(zip) {
   const f = zip.file('xl/sharedStrings.xml'); if (!f) return [];
   const xml = await f.async('string');
@@ -217,46 +240,109 @@ async function readSharedStrings(zip) {
   }
   return out;
 }
-// "Actual" 머리글 행/열과, 그 열을 참조하는 수식 위치를 찾는다
 function scanSheet(xml, shared) {
-  const cells = [];
+  const cells = new Map();   // "A12" → { col, row, v (text|number), f }
   let lastRow = 0;
   for (const m of xml.matchAll(/<c r="([A-Z]+)(\d+)"([^>]*?)(?:\/>|>([\s\S]*?)<\/c>)/g)) {
     const col = m[1], row = +m[2], attrs = m[3], body = m[4] || '';
     if (row > lastRow) lastRow = row;
-    let text = null;
-    const v = (body.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
-    if (/\bt="s"/.test(attrs) && v !== undefined) text = shared[+v];
-    else if (/\bt="inlineStr"/.test(attrs)) text = decodeXml((body.match(/<t[^>]*>([\s\S]*?)<\/t>/) || [])[1] || '');
-    else if (/\bt="str"/.test(attrs) && v !== undefined) text = decodeXml(v);
+    const raw = (body.match(/<v>([\s\S]*?)<\/v>/) || [])[1];
+    let v = null;
+    if (/\bt="s"/.test(attrs) && raw !== undefined) v = shared[+raw];
+    else if (/\bt="inlineStr"/.test(attrs)) v = decodeXml((body.match(/<t[^>]*>([\s\S]*?)<\/t>/) || [])[1] || '');
+    else if (/\bt="(str|e)"/.test(attrs) && raw !== undefined) v = decodeXml(raw);
+    else if (/\bt="b"/.test(attrs)) v = raw === '1';
+    else if (raw !== undefined && raw !== '') v = +raw;
     const f = (body.match(/<f[^>]*>([\s\S]*?)<\/f>/) || [])[1];
-    cells.push({ col, row, text, f: f ? decodeXml(f) : null });
+    cells.set(col + row, { col, row, v, f: f ? decodeXml(f) : null });
   }
-  const hdr = cells.filter(c => c.text && c.text.trim() === 'Actual');
-  if (!hdr.length) return { hdrRow: null, cols: [], refs: [], lastRow };
-  const hdrRow = Math.min(...hdr.map(c => c.row));
-  const cols = hdr.filter(c => c.row === hdrRow).map(c => c.col).sort((a, b) => colToNum(a) - colToNum(b));
+  const slave = new Set();
+  for (const m of xml.matchAll(/<mergeCell ref="([A-Z]+)(\d+):([A-Z]+)(\d+)"/g)) {
+    const c1 = colToNum(m[1]), r1 = +m[2], c2 = colToNum(m[3]), r2 = +m[4];
+    for (let r = r1; r <= r2; r++) for (let c = c1; c <= c2; c++) if (r !== r1 || c !== c1) slave.add(numToCol(c) + r);
+  }
+  const text = (col, row) => { const c = cells.get(col + row); return c && !slave.has(col + row) && c.v !== null && c.v !== undefined ? String(c.v).trim() : ''; };
+
+  // Actual 머리글
+  const hdr = [...cells.values()].filter(c => typeof c.v === 'string' && c.v.trim() === 'Actual');
+  let hdrRow = null, cols = [];
+  if (hdr.length) {
+    hdrRow = Math.min(...hdr.map(c => c.row));
+    cols = hdr.filter(c => c.row === hdrRow).map(c => c.col).sort((a, b) => colToNum(a) - colToNum(b));
+  }
   const colSet = new Set(cols);
   const refs = [];
-  for (const c of cells) {
+  if (cols.length) for (const c of cells.values()) {
     if (!c.f || colSet.has(c.col)) continue;
     for (const r of c.f.matchAll(/(?<![A-Z!])\$?([A-Z]{1,3})\$?(\d+)(?![\d(])/g)) {
       if (colSet.has(r[1]) && +r[2] > hdrRow) refs.push({ col: r[1], row: +r[2], at: c.col + c.row });
     }
   }
-  return { hdrRow, cols, refs, lastRow };
+
+  // 검사 항목 표: "항 목"/"순서" 머리글 행마다 측정치 1, 2, 3… 열을 찾고 그 아래 항목 번호 행을 모은다
+  const heads = [...cells.values()]
+    .filter(c => typeof c.v === 'string' && /^(항목|순서)$/.test(norm(c.v)) && colToNum(c.col) <= 6 && !slave.has(c.col + c.row))
+    .sort((a, b) => a.row - b.row);
+  const blocks = [];
+  heads.forEach((h, hi) => {
+    let nomCol = null, tolCol = null, sampleCols = null, sampleRow = null;
+    for (const c of cells.values()) {
+      if (c.row !== h.row || typeof c.v !== 'string') continue;
+      const t = norm(c.v);
+      if (!nomCol && t.startsWith('기준')) nomCol = c.col;
+      if (!tolCol && t === '공차') tolCol = c.col;
+    }
+    for (const r of [h.row, h.row + 1]) {
+      const nums = new Map();
+      for (const c of cells.values()) if (c.row === r && isNum(c.v) && Number.isInteger(c.v) && colToNum(c.col) > colToNum(h.col) && !slave.has(c.col + r)) { if (!nums.has(c.v)) nums.set(c.v, c.col); }
+      if (!nums.has(1)) continue;
+      // 1, 2, 3… 또는 11, 12… 처럼 이어지는 번호. 시작 번호부터 순서대로
+      const start = Math.min(...[...nums.keys()].filter(k => k >= 1));
+      const list = []; for (let k = start; nums.has(k); k++) list.push({ k, col: nums.get(k) });
+      if (!sampleCols || list.length > sampleCols.length) { sampleCols = list; sampleRow = r; }
+    }
+    if (!sampleCols) {
+      // 머리글 오른쪽에 시료 번호가 11부터 시작하는 페이지 (넥스원 2쪽 이후)
+      for (const r of [h.row, h.row + 1]) {
+        const nums = [...cells.values()].filter(c => c.row === r && isNum(c.v) && Number.isInteger(c.v) && c.v > 1 && colToNum(c.col) > colToNum(h.col)).sort((a, b) => colToNum(a.col) - colToNum(b.col));
+        if (nums.length) { sampleCols = nums.map(c => ({ k: c.v, col: c.col })); sampleRow = r; break; }
+      }
+    }
+    if (!sampleCols) return;
+    const end = hi + 1 < heads.length ? heads[hi + 1].row - 1 : lastRow;
+    const items = [];
+    for (let r = sampleRow + 1; r <= end; r++) {
+      const m = text(h.col, r).match(/^\(?\s*(\d+)\s*\)?$/);
+      if (!m) continue;
+      let r2 = r + 1;
+      while (r2 <= end && r2 <= r + 8 && !text(h.col, r2) && !(nomCol && text(nomCol, r2))) r2++;
+      items.push({ no: +m[1], row: r, endRow: r2 - 1, nominal: nomCol ? text(nomCol, r) : '', tol: tolCol ? text(tolCol, r) : '' });
+    }
+    // 각 시료 열에서 항목 영역 안의 (병합 첫 칸) 칸들 = 값 넣을 자리
+    for (const it of items) {
+      it.slots = {};
+      for (const sc of sampleCols) {
+        const rows = [];
+        for (let r = it.row; r <= it.endRow; r++) if (!slave.has(sc.col + r)) rows.push(r);
+        it.slots[sc.k] = rows;
+      }
+    }
+    blocks.push({ headRow: h.row, sampleCols, items });
+  });
+  return { hdrRow, cols, refs, lastRow, blocks, formulaCells: new Set([...cells.values()].filter(c => c.f).map(c => c.col + c.row)) };
 }
 function renderTemplate() {
   const t = state.tpl; if (!t) { $('tplInfo').innerHTML = ''; return; }
   const rows = t.sheets.map(s => {
     const v = vendorOf(s);
+    const nItems = s.blocks.reduce((a, b) => a + b.items.length, 0);
     return `<tr><td>${esc(s.name)}</td><td>${s.cols.length
-      ? `<span class="tag ok">${v ? v + ' · ' : ''}시료 ${s.cols.length}칸</span> <span class="muted">${s.cols[0]}${s.cols.length > 1 ? ' ~ ' + s.cols[s.cols.length - 1] : ''} 열, ${s.hdrRow}행 머리글</span>`
+      ? `<span class="tag ok">${v ? v + ' · ' : ''}시료 ${s.cols.length}칸</span> <span class="muted">${s.cols[0]}${s.cols.length > 1 ? ' ~ ' + s.cols[s.cols.length - 1] : ''} 열</span>`
       : '<span class="tag off">Actual 칸 없음 (3차원 측정 없는 품번)</span>'}</td>
-      <td>${s.refs.length ? s.refs.length + '개 수식이 3차원 값을 가져감' : ''}</td></tr>`;
+      <td>${nItems ? `검사 항목 ${nItems}행` : ''}</td></tr>`;
   }).join('');
   $('tplInfo').innerHTML = `<p class="muted" style="margin:0 0 4px">${esc(t.name)}</p>
-    <table class="t"><tr><th>시트(품번)</th><th>Actual 칸</th><th>연결</th></tr>${rows}</table>`;
+    <table class="t"><tr><th>시트(품번)</th><th>Actual 칸</th><th>성적서 표</th></tr>${rows}</table>`;
 }
 
 // ---------- 2. 3차원 성적서 읽기 ----------
@@ -271,11 +357,14 @@ async function loadSources(files) {
   assignSheets();
   renderSources(); renderPlan();
   document.body.classList.remove('busy');
-  if (errs.length) setMsg('읽지 못한 파일:\n' + errs.join('\n'), 'err'); else setMsg('');
+  if (errs.length) setMsg('읽지 못한 파일:\n' + errs.join('\n'), 'err');
 }
 function parse3D(name, wb) {
   const ws = wb.Sheets[wb.SheetNames[0]];
-  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+  const rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '', blankrows: true });
+  // 시트가 1행부터 시작하지 않으면(맨 위 빈 행) 엑셀 행 번호가 어긋나므로 앞을 채움
+  const r0 = ws['!ref'] ? XLSX.utils.decode_range(ws['!ref']).s.r : 0;
+  for (let i = 0; i < r0; i++) rows.unshift([]);
   let hr = -1, ac = -1;
   for (let r = 0; r < Math.min(rows.length, 60) && hr < 0; r++) {
     const i = (rows[r] || []).findIndex(v => String(v).trim() === 'Actual');
@@ -286,7 +375,6 @@ function parse3D(name, wb) {
   const ci = re => hdr.findIndex(h => re.test(h));
   const cNo = ci(/^no\.?$/), cItem = ci(/^item$/), cNom = ci(/^nominal$/), cUp = ci(/^uptol$/), cLo = ci(/^lowtol$/), cDev = ci(/^deviation$/);
 
-  // 머리 정보: "품    번" 같은 라벨 오른쪽의 첫 값
   const meta = {};
   const labels = { '품명': 'partName', '품번': 'partNo', '측정일시': 'date', '측정일': 'date', '측정자': 'inspector' };
   for (let r = 0; r < hr; r++) {
@@ -298,14 +386,35 @@ function parse3D(name, wb) {
     });
   }
 
-  // 붙여넣을 값: 머리글 행부터 끝까지 Actual 열 (엑셀 행 번호 기준)
-  const values = new Map();
+  const values = new Map();   // 엑셀 행 번호 → Actual 열 값
   for (let r = hr; r < rows.length; r++) {
     const v = (rows[r] || [])[ac];
     if (v !== '' && v !== null && v !== undefined) values.set(r + 1, v);
   }
 
-  // 공차가 있는 항목만 판정
+  // 번호 표시: "<- YAXIS[평균]:점10와 점11 <3>", "<12-17>", "<32-1, 33-1>"
+  // 표시 다음 행부터 숫자가 이어지는 동안이 그 요소의 값(X, Y, Z, D, 각도…).
+  // 번호가 k개 적혀 있으면 마지막 k개 값을 순서대로 배정 (원: D, 원뿔: D와 각도)
+  const tags = new Map();
+  const tagErrs = [];
+  for (let r = hr + 2; r <= rows.length; r++) {
+    const v = values.get(r);
+    if (typeof v !== 'string') continue;
+    const m = v.match(/<\s*(\d+(?:\s*-\s*\d+)?(?:\s*,\s*\d+(?:\s*-\s*\d+)?)*)\s*>\s*$/);
+    if (!m) continue;
+    const entries = m[1].split(',').map(e => { const p = e.split('-').map(x => +x.trim()); return { item: p[0], loc: p.length > 1 ? p[1] : 0 }; });
+    const nums = [];
+    for (let r2 = r + 1; isNum(values.get(r2)); r2++) nums.push(r2);
+    if (nums.length < entries.length) { tagErrs.push(`${r}행 ${m[0].trim()}: 값이 모자람`); continue; }
+    entries.forEach((e, i) => {
+      const row = nums[nums.length - entries.length + i];
+      if (!tags.has(e.item)) tags.set(e.item, []);
+      tags.get(e.item).push({ loc: e.loc, row, value: values.get(row), label: m[0].trim() });
+    });
+  }
+  for (const list of tags.values()) list.sort((a, b) => a.loc - b.loc || a.row - b.row);
+
+  // 3차원 성적서 자체 공차 판정
   const items = [];
   let no = '', feat = '';
   for (let r = hr + 1; r < rows.length; r++) {
@@ -314,13 +423,12 @@ function parse3D(name, wb) {
     const a = row[ac], nom = cNom >= 0 ? row[cNom] : '';
     if (!isNum(a) || !isNum(nom)) continue;
     const up = isNum(row[cUp]) ? row[cUp] : null, lo = isNum(row[cLo]) ? row[cLo] : null;
-    const eps = 1e-9;
-    const ok = (up === null || a <= nom + up + eps) && (lo === null || a >= nom + lo - eps);
+    const ok = (up === null || a <= nom + up + 1e-9) && (lo === null || a >= nom + lo - 1e-9);
     items.push({ row: r + 1, no, feat, type: String(row[cItem] ?? '').trim(), actual: a, nominal: nom, up, lo, dev: cDev >= 0 ? row[cDev] : '', ok });
   }
   return {
     file: name, partNo: meta.partNo || '', partName: meta.partName || '', date: meta.date || '', inspector: meta.inspector || '',
-    hdrRow: hr + 1, lastRow: rows.length, values, items, ng: items.filter(i => !i.ok), sheet: null, slot: null,
+    hdrRow: hr + 1, lastRow: rows.length, values, tags, tagErrs, items, ng: items.filter(i => !i.ok), sheet: null, slot: null,
   };
 }
 function assignSheets() {
@@ -332,7 +440,6 @@ function assignSheets() {
     const hit = withCols.find(x => norm(x.name) === p) || withCols.find(x => p && (norm(x.name).includes(p) || p.includes(norm(x.name))));
     s.sheet = hit ? hit.name : (withCols.length === 1 ? withCols[0].name : null);
   }
-  // 시트별로 비어 있는 시료 번호를 앞에서부터 채움
   for (const sh of withCols) {
     const group = state.srcs.filter(s => s.sheet === sh.name);
     const used = new Set(group.filter(s => s.slot).map(s => s.slot));
@@ -348,19 +455,19 @@ function renderSources() {
   if (!state.srcs.length) { $('srcInfo').innerHTML = ''; return; }
   const t = state.tpl;
   const sheetOpts = t ? t.sheets.filter(s => s.cols.length).map(s => s.name) : [];
-  let h = `<table class="t"><tr><th>시료</th><th>파일</th><th>품번</th><th>품명</th><th>측정일</th><th>측정자</th><th>공차 판정</th><th>넣을 시트</th><th></th></tr>`;
+  let h = `<table class="t"><tr><th>시료</th><th>파일</th><th>품번</th><th>품명</th><th>측정일</th><th>번호 표시</th><th>3D 공차 판정</th><th>넣을 시트</th><th></th></tr>`;
   state.srcs.forEach((s, i) => {
-    const judge = !s.items.length ? '<span class="tag off">공차 항목 없음</span>'
+    const judge = !s.items.length ? '<span class="tag off">없음</span>'
       : s.ng.length ? `<button type="button" class="small" data-ng="${i}"><span class="tag ng">NG ${s.ng.length}</span> / ${s.items.length}</button>`
-      : `<span class="tag ok">전부 OK</span> <span class="muted">${s.items.length}항목</span>`;
+      : `<span class="tag ok">전부 OK</span> <span class="muted">${s.items.length}</span>`;
     const sel = t ? `<select data-sheet="${i}"><option value="">(넣지 않음)</option>${sheetOpts.map(n => `<option${n === s.sheet ? ' selected' : ''}>${esc(n)}</option>`).join('')}</select>` : '<span class="muted">양식 먼저</span>';
     h += `<tr><td><input type="number" min="1" data-slot="${i}" value="${s.slot ?? ''}"></td>
       <td class="wrap">${esc(s.file)}</td><td>${esc(s.partNo)}</td><td class="wrap">${esc(s.partName)}</td>
-      <td>${esc(s.date)}</td><td>${esc(s.inspector)}</td><td>${judge}</td><td>${sel}</td>
+      <td>${esc(s.date)}</td><td>${s.tags.size ? `<span class="tag ok">${s.tags.size}개 번호</span>` : '<span class="tag off">없음</span>'}</td><td>${judge}</td><td>${sel}</td>
       <td><button type="button" class="small" data-del="${i}" title="빼기">✕</button></td></tr>`;
     if (s.showNg) {
       h += `<tr class="ngrow"><td></td><td colspan="8"><table class="t"><tr><th>No.</th><th>항목</th><th>Actual</th><th>Nominal</th><th>Up</th><th>Low</th><th>Deviation</th><th>3D 행</th></tr>
-        ${s.ng.map(n => `<tr><td>${esc(n.no)}</td><td>${esc(n.feat)} ${esc(n.type)}</td><td><b>${n.actual}</b></td><td>${n.nominal}</td><td>${n.up ?? ''}</td><td>${n.lo ?? ''}</td><td>${esc(n.dev)}</td><td>${n.row}</td></tr>`).join('')}
+        ${s.ng.map(n => `<tr><td>${esc(n.no)}</td><td>${esc(n.feat)} ${esc(n.type)}</td><td><b>${fmt(n.actual)}</b></td><td>${fmt(n.nominal)}</td><td>${fmt(n.up)}</td><td>${fmt(n.lo)}</td><td>${fmt(n.dev)}</td><td>${n.row}</td></tr>`).join('')}
         </table></td></tr>`;
     }
   });
@@ -377,8 +484,55 @@ $('srcInfo').addEventListener('change', e => {
   if (t.dataset.slot !== undefined) { state.srcs[+t.dataset.slot].slot = +t.value || null; renderPlan(); }
   if (t.dataset.sheet !== undefined) { const s = state.srcs[+t.dataset.sheet]; s.sheet = t.value || null; s.slot = null; assignSheets(); renderSources(); renderPlan(); }
 });
+['fillItems', 'decimals'].forEach(id => $(id).addEventListener('change', renderPlan));
 
-// ---------- 3. 계획 / 검사 ----------
+// ---------- 3. 계획 ----------
+// 항목 칸에 넣을 내용: 1개소 → 그 값, 여러 개소 → 칸이 2개 이상이면 최소/최대, 1칸이면 "최소~최대"
+function itemWrites(sheet, bySlot) {
+  const writes = new Map();   // "G38" → { formula, cached }
+  const report = [];          // 화면 표시용
+  const dec = Math.max(0, Math.min(6, +$('decimals').value || 0));
+  const numFmt = dec ? '0.' + '0'.repeat(dec) : '0';
+  for (const b of sheet.blocks) {
+    for (const it of b.items) {
+      const line = { no: it.no, nominal: it.nominal, tol: it.tol, row: it.row, cells: {}, locs: 0 };
+      const nom = parseNominal(it.nominal), tol = parseTol(it.tol);
+      for (const sc of b.sampleCols) {
+        const s = bySlot.get(sc.k);
+        if (!s || sc.k > sheet.cols.length) continue;
+        const list = s.tags.get(it.no);
+        if (!list || !list.length) continue;
+        const col = sheet.cols[sc.k - 1], off = sheet.hdrRow - s.hdrRow;
+        const refs = list.map(t => col + (t.row + off));
+        const vals = list.map(t => t.value);
+        const slots = it.slots[sc.k] || [];
+        if (!slots.length) continue;
+        const min = Math.min(...vals), max = Math.max(...vals);
+        const ng = nom !== null && tol ? vals.some(v => v - nom > tol.up + 1e-9 || v - nom < tol.lo - 1e-9) : null;
+        line.locs = Math.max(line.locs, list.length);
+        if (list.length === 1) {
+          writes.set(sc.col + slots[0], { formula: refs[0], cached: vals[0] });
+          slots.slice(1).forEach(r => writes.set(sc.col + r, { clear: true }));
+          line.cells[sc.k] = { text: fmt(vals[0]), ng };
+        } else if (slots.length >= 2) {
+          writes.set(sc.col + slots[0], { formula: `MIN(${refs.join(',')})`, cached: min });
+          writes.set(sc.col + slots[1], { formula: `MAX(${refs.join(',')})`, cached: max });
+          slots.slice(2).forEach(r => writes.set(sc.col + r, { clear: true }));
+          line.cells[sc.k] = { text: `${fmt(min)} / ${fmt(max)}`, ng };
+        } else {
+          const r = refs.join(',');
+          writes.set(sc.col + slots[0], {
+            formula: `TEXT(ROUND(MIN(${r}),${dec}),"${numFmt}")&"~"&CHAR(10)&TEXT(ROUND(MAX(${r}),${dec}),"${numFmt}")`,
+            cached: min.toFixed(dec) + '~\n' + max.toFixed(dec),
+          });
+          line.cells[sc.k] = { text: `${min.toFixed(dec)}~${max.toFixed(dec)}`, ng };
+        }
+      }
+      if (Object.keys(line.cells).length) report.push(line);
+    }
+  }
+  return { writes, report };
+}
 function buildPlan() {
   const t = state.tpl;
   const errs = [], warns = [], jobs = [];
@@ -395,21 +549,31 @@ function buildPlan() {
       if (!s.slot || s.slot > sh.cols.length) { errs.push(`${sh.name}: "${s.file}" 시료 번호가 1~${sh.cols.length} 범위를 벗어났습니다.`); continue; }
       if (bySlot.has(s.slot)) { errs.push(`${sh.name}: 시료 ${s.slot}번이 두 파일에 겹칩니다 (${bySlot.get(s.slot).file}, ${s.file}).`); continue; }
       bySlot.set(s.slot, s);
-      if (s.hdrRow !== sh.hdrRow) warns.push(`${sh.name}: "${s.file}"의 Actual 머리글이 ${s.hdrRow}행인데 양식은 ${sh.hdrRow}행이라 위치를 맞춰 넣습니다. 3차원 프로그램 출력이 바뀌지 않았는지 확인하세요.`);
+      if (s.hdrRow !== sh.hdrRow) warns.push(`${sh.name}: "${s.file}"의 Actual 머리글이 ${s.hdrRow}행, 양식은 ${sh.hdrRow}행이라 위치를 맞춰 넣습니다.`);
       if (norm(s.partNo) && norm(s.partNo) !== norm(sh.name)) warns.push(`${sh.name}: "${s.file}"의 품번(${s.partNo})이 시트 이름과 다릅니다.`);
+      if (s.tagErrs.length) warns.push(`${s.file}: 번호 표시 다음에 값이 모자란 곳 — ${s.tagErrs.slice(0, 5).join(', ')}`);
     }
-    // 성적서 수식이 숫자가 아닌 칸을 가리키면 행이 밀린 것
+    const { writes, report } = $('fillItems').checked ? itemWrites(sh, bySlot) : { writes: new Map(), report: [] };
+
+    // 번호는 3D에 있는데 양식 표에 그 번호 항목이 없는 경우
+    if ($('fillItems').checked) {
+      const itemNos = new Set(sh.blocks.flatMap(b => b.items.map(i => i.no)));
+      const missing = new Set();
+      for (const s of bySlot.values()) for (const n of s.tags.keys()) if (!itemNos.has(n)) missing.add(n);
+      if (missing.size) warns.push(`${sh.name}: 3차원 번호 ${[...missing].sort((a, b) => a - b).join(', ')}번에 해당하는 항목이 양식 표에 없습니다.`);
+    }
+    // 남아 있는 기존 수식이 숫자가 아닌 3차원 칸을 가리키면 행이 밀린 것
     const bad = new Set();
     for (const [slot, s] of bySlot) {
       const col = sh.cols[slot - 1], off = sh.hdrRow - s.hdrRow;
       for (const r of sh.refs) {
-        if (r.col !== col) continue;
+        if (r.col !== col || writes.has(r.at)) continue;
         const v = s.values.get(r.row - off);
         if (!isNum(v)) bad.add(`${r.at}→${col}${r.row}${v === undefined ? '(빈칸)' : '(' + v + ')'}`);
       }
     }
-    if (bad.size) warns.push(`${sh.name}: 성적서 수식 ${bad.size}곳이 숫자가 아닌 3차원 칸을 가리킵니다. 측정 프로그램 순서가 바뀌었을 수 있으니 확인하세요: ${[...bad].slice(0, 8).join(', ')}${bad.size > 8 ? ' …' : ''}`);
-    jobs.push({ sheet: sh, bySlot });
+    if (bad.size) warns.push(`${sh.name}: 기존 수식 ${bad.size}곳이 숫자가 아닌 3차원 칸을 가리킵니다. 확인하세요: ${[...bad].slice(0, 8).join(', ')}${bad.size > 8 ? ' …' : ''}`);
+    jobs.push({ sheet: sh, bySlot, writes, report });
   }
   if (!jobs.length && !errs.length) errs.push('넣을 수 있는 파일이 없습니다. "넣을 시트"를 지정해주세요.');
   return { errs, warns, jobs };
@@ -419,14 +583,20 @@ function renderPlan() {
   if (!state.tpl || !state.srcs.length) { $('planInfo').innerHTML = ''; return; }
   const { errs, warns, jobs } = buildPlan();
   let h = '';
-  if (jobs.length) {
-    h += '<table class="t"><tr><th>시트</th><th>시료 칸</th><th>NG</th></tr>';
-    for (const j of jobs) {
-      const slots = j.sheet.cols.map((c, i) => j.bySlot.has(i + 1) ? `<span class="tag ok" title="${esc(j.bySlot.get(i + 1).file)}">${i + 1}</span>` : `<span class="tag off">${i + 1}</span>`).join(' ');
-      const ng = [...j.bySlot.values()].reduce((a, s) => a + s.ng.length, 0);
-      h += `<tr><td>${esc(j.sheet.name)}</td><td class="wrap">${slots}</td><td>${ng ? `<span class="tag ng">${ng}</span>` : '<span class="tag ok">0</span>'}</td></tr>`;
+  for (const j of jobs) {
+    const slots = j.sheet.cols.map((c, i) => j.bySlot.has(i + 1) ? `<span class="tag ok" title="${esc(j.bySlot.get(i + 1).file)}">${i + 1}</span>` : `<span class="tag off">${i + 1}</span>`).join(' ');
+    const ks = [...j.bySlot.keys()].sort((a, b) => a - b);
+    const ngCount = j.report.reduce((a, l) => a + Object.values(l.cells).filter(c => c.ng).length, 0);
+    h += `<h3 style="font-size:14px;margin:14px 0 6px">${esc(j.sheet.name)} <span class="muted" style="font-weight:400">시료 칸 ${slots}</span></h3>`;
+    if (j.report.length) {
+      h += `<details${ngCount ? ' open' : ''}><summary>번호로 채울 항목 ${j.report.length}개${ngCount ? ` · <span class="tag ng">공차 벗어남 ${ngCount}</span>` : ' · <span class="tag ok">모두 공차 안</span>'}</summary>
+        <div class="tbl-wrap"><table class="t"><tr><th>항목</th><th>기준치</th><th>공차</th><th>개소</th>${ks.map(k => `<th>시료 ${k}</th>`).join('')}</tr>
+        ${j.report.map(l => `<tr><td>${l.no}</td><td class="wrap">${esc(l.nominal)}</td><td>${esc(l.tol).replace(/\n/g, ' / ')}</td><td>${l.locs}</td>
+          ${ks.map(k => { const c = l.cells[k]; return c ? `<td class="num${c.ng ? ' ngv' : ''}">${esc(c.text)}</td>` : '<td></td>'; }).join('')}</tr>`).join('')}
+        </table></div></details>`;
+    } else if ($('fillItems').checked) {
+      h += '<p class="hint" style="margin-top:0">3차원 파일에 번호 표시가 없어 Actual 칸만 붙여넣습니다 (성적서 칸은 양식에 있던 수식 그대로).</p>';
     }
-    h += '</table>';
   }
   $('planInfo').innerHTML = h;
   if (errs.length) setMsg(errs.join('\n'), 'err');
@@ -435,13 +605,33 @@ function renderPlan() {
 }
 
 // ---------- 4. 엑셀 쓰기 (시트 XML 직접 수정) ----------
-function patchSheet(xml, sheet, bySlot, clearUnused) {
+// 공유 수식의 상대 참조를 옮긴다 (기준 칸을 지울 때 다음 칸이 기준이 되도록)
+function shiftFormula(f, dr, dc) {
+  return f.replace(/("[^"]*")|('[^']*'!|\b[A-Za-z_][\w.]*!)?(\$?)([A-Z]{1,3})(\$?)(\d+)(?![\w(])/g, (m, str, sheetPfx, d1, c, d2, r, offset, whole) => {
+    if (str) return str;
+    const prev = whole[offset - 1];
+    if (prev && /[A-Za-z0-9_.]/.test(prev) && !sheetPfx) return m;
+    const nc = d1 ? c : numToCol(colToNum(c) + dc);
+    const nr = d2 ? r : String(+r + dr);
+    return (sheetPfx || '') + d1 + nc + d2 + nr;
+  });
+}
+function patchSheet(xml, sheet, bySlot, clearUnused, itemCells) {
   const doc = new DOMParser().parseFromString(xml, 'application/xml');
   if (doc.getElementsByTagName('parsererror').length) throw new Error(sheet.name + ' 시트를 해석하지 못했습니다.');
   const NS = doc.documentElement.namespaceURI || NS_MAIN;
   const sheetData = doc.getElementsByTagNameNS(NS, 'sheetData')[0];
   const rowMap = new Map();
   for (const r of sheetData.children) rowMap.set(+r.getAttribute('r'), r);
+
+  // 공유 수식 그룹 (si → 칸 목록)
+  const sharedGroups = new Map();
+  for (const f of doc.getElementsByTagNameNS(NS, 'f')) {
+    if (f.getAttribute('t') !== 'shared') continue;
+    const si = f.getAttribute('si');
+    if (!sharedGroups.has(si)) sharedGroups.set(si, []);
+    sharedGroups.get(si).push(f);
+  }
 
   function getRow(n) {
     let row = rowMap.get(n);
@@ -452,8 +642,11 @@ function patchSheet(xml, sheet, bySlot, clearUnused) {
     sheetData.insertBefore(row, before); rowMap.set(n, row);
     return row;
   }
-  function getCell(row, col, create) {
-    const ref = col + row.getAttribute('r'), cn = colToNum(col);
+  function getCell(ref, create) {
+    const m = ref.match(/^([A-Z]+)(\d+)$/), col = m[1], rn = +m[2];
+    const row = create ? getRow(rn) : rowMap.get(rn);
+    if (!row) return null;
+    const cn = colToNum(col);
     let before = null;
     for (const c of row.children) {
       const cc = colToNum((c.getAttribute('r') || '').replace(/\d+/g, ''));
@@ -466,11 +659,30 @@ function patchSheet(xml, sheet, bySlot, clearUnused) {
     return c;
   }
   const replaced = [];
-  function setVal(c, v) {
-    // 엑셀에서 붙여넣기 하듯 수식이 있던 칸도 실제 측정값으로 덮어씀
-    if ([...c.children].some(x => x.localName === 'f')) replaced.push(sheet.name + '!' + c.getAttribute('r'));
+  // 칸의 수식을 떼어냄. 공유 수식의 기준 칸이면 같은 그룹의 다음 칸에 수식을 넘겨줌
+  function detachFormula(c) {
+    const f = [...c.children].find(x => x.localName === 'f');
+    if (!f) return false;
+    if (f.getAttribute('t') === 'shared') {
+      const si = f.getAttribute('si');
+      const group = (sharedGroups.get(si) || []).filter(x => x !== f && x.parentNode);
+      sharedGroups.set(si, group);
+      if (f.hasAttribute('ref') && group.length) {
+        const heir = group[0];
+        const from = c.getAttribute('r').match(/^([A-Z]+)(\d+)$/), to = heir.parentNode.getAttribute('r').match(/^([A-Z]+)(\d+)$/);
+        heir.textContent = shiftFormula(f.textContent, +to[2] - +from[2], colToNum(to[1]) - colToNum(from[1]));
+        heir.setAttribute('ref', f.getAttribute('ref'));
+      }
+    }
+    return true;
+  }
+  function clearCell(c) {
     while (c.firstChild) c.removeChild(c.firstChild);
     c.removeAttribute('t');
+  }
+  function setVal(c, v) {
+    if (detachFormula(c)) replaced.push(c.getAttribute('r'));
+    clearCell(c);
     if (v === null || v === undefined || v === '') return;
     if (isNum(v)) {
       const e = doc.createElementNS(NS, 'v'); e.textContent = String(v); c.appendChild(e);
@@ -481,7 +693,17 @@ function patchSheet(xml, sheet, bySlot, clearUnused) {
       t.textContent = String(v); is.appendChild(t); c.appendChild(is);
     }
   }
+  function setFormula(c, formula, cached) {
+    detachFormula(c);
+    clearCell(c);
+    const f = doc.createElementNS(NS, 'f'); f.textContent = formula; c.appendChild(f);
+    const v = doc.createElementNS(NS, 'v');
+    if (isNum(cached)) v.textContent = String(cached);
+    else { c.setAttribute('t', 'str'); v.textContent = String(cached ?? ''); }
+    c.appendChild(v);
+  }
 
+  // ① Actual 칸 붙여넣기
   const firstData = sheet.hdrRow + 1;
   sheet.cols.forEach((col, i) => {
     const s = bySlot.get(i + 1);
@@ -490,16 +712,17 @@ function patchSheet(xml, sheet, bySlot, clearUnused) {
     const end = Math.max(sheet.lastRow, s ? s.lastRow + off : 0);
     for (let r = firstData; r <= end; r++) {
       const v = s ? s.values.get(r - off) : undefined;
-      const exists = rowMap.has(r);
-      if (v === undefined) {               // 비울 칸: 있는 칸만 값 제거(서식 유지)
-        if (!exists) continue;
-        const c = getCell(rowMap.get(r), col, false);
-        if (c) setVal(c, null);
-      } else {
-        setVal(getCell(getRow(r), col, true), v);
-      }
+      if (v === undefined) { const c = getCell(col + r, false); if (c) setVal(c, null); }
+      else setVal(getCell(col + r, true), v);
     }
   });
+  // ② 번호로 찾은 성적서 측정치 칸
+  for (const [ref, w] of itemCells) {
+    const c = getCell(ref, !w.clear);
+    if (!c) continue;
+    if (w.clear) { detachFormula(c); clearCell(c); }
+    else setFormula(c, w.formula, w.cached);
+  }
   let out = new XMLSerializer().serializeToString(doc);
   if (!/^<\?xml/.test(out)) out = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + out;
   return { xml: out, replaced };
@@ -511,16 +734,22 @@ $('runBtn').addEventListener('click', async () => {
   document.body.classList.add('busy');
   setMsg('만드는 중…');
   try {
-    // 원본 zip을 건드리지 않도록 새로 연다
     const zip = await JSZip.loadAsync(await state.tpl.zip.generateAsync({ type: 'arraybuffer' }));
     const replaced = [];
     for (const j of jobs) {
       const xml = await zip.file(j.sheet.path).async('string');
-      const r = patchSheet(xml, j.sheet, j.bySlot, $('clearUnused').checked);
-      replaced.push(...r.replaced);
+      const r = patchSheet(xml, j.sheet, j.bySlot, $('clearUnused').checked, j.writes);
+      replaced.push(...r.replaced.map(x => j.sheet.name + '!' + x));
       zip.file(j.sheet.path, r.xml, { createFolders: false });
     }
-    // 엑셀이 열 때 수식을 다시 계산하도록
+    // 계산 순서 목록(calcChain)은 수식 칸이 바뀌면 어긋나므로 지우고, 열 때 전부 다시 계산하게 함
+    if (zip.file('xl/calcChain.xml')) {
+      zip.remove('xl/calcChain.xml');
+      const ct = await zip.file('[Content_Types].xml').async('string');
+      zip.file('[Content_Types].xml', ct.replace(/<Override[^>]*PartName="\/xl\/calcChain\.xml"[^>]*\/>/, ''), { createFolders: false });
+      const rels = await zip.file('xl/_rels/workbook.xml.rels').async('string');
+      zip.file('xl/_rels/workbook.xml.rels', rels.replace(/<Relationship[^>]*Target="[^"]*calcChain\.xml"[^>]*\/>/, ''), { createFolders: false });
+    }
     let wb = await zip.file('xl/workbook.xml').async('string');
     if (/<calcPr\b/.test(wb)) wb = wb.replace(/<calcPr\b([^>]*?)(\/?)>/, (m, a, sl) => `<calcPr${a.replace(/\sfullCalcOnLoad="[^"]*"/, '')} fullCalcOnLoad="1"${sl}>`);
     else wb = wb.replace(/(<\/sheets>(?:\s*<definedNames>[\s\S]*?<\/definedNames>)?)/, '$1<calcPr fullCalcOnLoad="1"/>');
@@ -534,8 +763,8 @@ $('runBtn').addEventListener('click', async () => {
     setTimeout(() => URL.revokeObjectURL(a.href), 3000);
 
     const total = jobs.reduce((n, j) => n + j.bySlot.size, 0);
-    const ng = jobs.reduce((n, j) => n + [...j.bySlot.values()].reduce((a, s) => a + s.ng.length, 0), 0);
-    let note = `${name} 저장 완료 · 시트 ${jobs.length}개, 시료 ${total}개` + (ng ? ` · 3차원 NG ${ng}건 (위 표에서 확인)` : '');
+    const items = jobs.reduce((n, j) => n + j.report.length, 0);
+    let note = `${name} 저장 완료 · 시트 ${jobs.length}개, 시료 ${total}개` + (items ? `, 번호로 채운 항목 ${items}개` : '');
     if (replaced.length) note += `\n양식의 Actual 칸에 있던 수식 ${replaced.length}개를 실제 3차원 측정값으로 바꿨습니다: ${replaced.slice(0, 10).join(', ')}${replaced.length > 10 ? ' …' : ''}`;
     note += '\n엑셀에서 열면 수식이 자동으로 다시 계산됩니다. 닫을 때 저장 여부를 물으면 "저장"하세요.';
     if (warns.length) note += '\n\n' + warns.join('\n');
