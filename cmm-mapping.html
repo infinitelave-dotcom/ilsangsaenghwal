@@ -1,0 +1,793 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>성적서 직접 매핑</title>
+<meta name="theme-color" content="#1F6F5C">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root {
+    --paper: #EFEFEF;
+    --raised: #FFFFFF;
+    --ink: #202124;
+    --ink-soft: #6B6C6E;
+    --line: rgba(32,33,36,0.14);
+    --line-strong: rgba(32,33,36,0.28);
+    --accent: #1F6F5C;
+    --accent-bg: rgba(31,111,92,0.10);
+    --ng: #A9433D;
+    --ng-bg: rgba(169,67,61,0.10);
+    --pick: #A8791E;
+    --pick-bg: rgba(168,121,30,0.16);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #141414;
+      --raised: #202020;
+      --ink: #EDEDED;
+      --ink-soft: #9C9C9E;
+      --line: rgba(237,237,237,0.14);
+      --line-strong: rgba(237,237,237,0.28);
+      --accent: #4FBF9F;
+      --accent-bg: rgba(79,191,159,0.12);
+      --ng: #E17872;
+      --ng-bg: rgba(225,120,114,0.14);
+      --pick: #D9A94D;
+      --pick-bg: rgba(217,169,77,0.18);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper: #141414; --raised: #202020; --ink: #EDEDED; --ink-soft: #9C9C9E;
+    --line: rgba(237,237,237,0.14); --line-strong: rgba(237,237,237,0.28);
+    --accent: #4FBF9F; --accent-bg: rgba(79,191,159,0.12);
+    --ng: #E17872; --ng-bg: rgba(225,120,114,0.14);
+    --pick: #D9A94D; --pick-bg: rgba(217,169,77,0.18);
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--paper); color: var(--ink);
+    font: 14px/1.5 Inter, "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+  }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 24px 16px 80px; }
+  header h1 { font-size: 22px; margin: 0 0 4px; }
+  header p { margin: 0 0 20px; color: var(--ink-soft); }
+  section {
+    background: var(--raised); border: 1px solid var(--line); border-radius: 12px;
+    padding: 18px; margin-bottom: 16px;
+  }
+  section h2 { font-size: 16px; margin: 0 0 12px; display: flex; gap: 8px; align-items: center; }
+  .step {
+    display: inline-grid; place-items: center; width: 24px; height: 24px; border-radius: 50%;
+    background: var(--accent); color: var(--raised); font-size: 13px; font-weight: 700;
+  }
+  .hint { color: var(--ink-soft); font-size: 13px; margin: 6px 0 0; }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; align-items: end; }
+  label.f { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--ink-soft); }
+  input[type=text], input[type=number], select {
+    font: inherit; color: var(--ink); background: var(--paper); border: 1px solid var(--line-strong);
+    border-radius: 8px; padding: 7px 9px; min-width: 0;
+  }
+  input:focus, select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input.addr { width: 90px; text-transform: uppercase; }
+  input.addr.active { background: var(--pick-bg); border-color: var(--pick); }
+  button {
+    font: inherit; font-weight: 600; cursor: pointer; border-radius: 8px; padding: 8px 14px;
+    border: 1px solid var(--line-strong); background: var(--raised); color: var(--ink);
+  }
+  button.primary { background: var(--accent); border-color: var(--accent); color: var(--raised); }
+  button:disabled { opacity: .45; cursor: not-allowed; }
+  .drop {
+    border: 2px dashed var(--line-strong); border-radius: 10px; padding: 18px; text-align: center;
+    color: var(--ink-soft); cursor: pointer;
+  }
+  .drop.over { border-color: var(--accent); background: var(--accent-bg); }
+  .drop input { display: none; }
+  .files { margin: 8px 0 0; padding: 0; list-style: none; display: flex; flex-wrap: wrap; gap: 6px; }
+  .files li { background: var(--accent-bg); border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+  .grid-wrap { overflow: auto; max-height: 420px; border: 1px solid var(--line); border-radius: 8px; margin-top: 10px; }
+  table.grid { border-collapse: collapse; font-size: 12px; }
+  table.grid th, table.grid td {
+    border: 1px solid var(--line); padding: 3px 6px; white-space: nowrap; max-width: 180px;
+    overflow: hidden; text-overflow: ellipsis;
+  }
+  table.grid th { background: var(--paper); position: sticky; top: 0; z-index: 1; color: var(--ink-soft); font-weight: 600; }
+  table.grid td.rh { background: var(--paper); position: sticky; left: 0; color: var(--ink-soft); text-align: right; }
+  table.grid.pickable td:not(.rh) { cursor: crosshair; }
+  table.grid.pickable td:not(.rh):hover { background: var(--pick-bg); }
+  table.grid tr.hdr td { background: var(--accent-bg); font-weight: 600; }
+  td.ng { color: var(--ng); font-weight: 700; background: var(--ng-bg); }
+  td.ok { color: var(--accent); font-weight: 700; }
+  .map { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 10px; }
+  .map .card { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 6px; }
+  .map .card b { font-size: 13px; }
+  .map .card .row { gap: 6px; }
+  .map .card select { flex: 1; }
+  .msg { margin-top: 10px; font-size: 13px; }
+  .msg.err { color: var(--ng); }
+  .msg.ok { color: var(--accent); }
+  .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 10px; }
+  .tabs button { padding: 4px 10px; font-size: 12px; }
+  .tabs button.on { background: var(--accent-bg); border-color: var(--accent); }
+  .chk { display: flex; align-items: center; gap: 6px; font-size: 13px; }
+  @media (max-width: 600px) {
+    .wrap { padding: 16px 16px 60px; }
+    input.addr { width: 74px; }
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>성적서 직접 매핑</h1>
+    <p>3차원 측정기(CMM) 결과 파일을 회사 성적서 엑셀 양식에 자동으로 채워 넣습니다. 파일은 브라우저 안에서만 처리되고 어디에도 업로드되지 않습니다. KER · MTG · 넥스원 양식은 <a href="cmm.html">3차원 성적서 변환</a>을 쓰세요.</p>
+  </header>
+
+  <!-- 1. 양식 -->
+  <section>
+    <h2><span class="step">1</span>성적서 양식 엑셀 (.xlsx)</h2>
+    <div class="drop" id="tplDrop">
+      양식 파일을 끌어다 놓거나 클릭해서 선택
+      <input type="file" id="tplFile" accept=".xlsx">
+    </div>
+    <ul class="files" id="tplName"></ul>
+    <div class="row" style="margin-top:10px">
+      <label class="f">시트<select id="tplSheet" disabled></select></label>
+    </div>
+    <p class="hint">아래 설정 칸(주황색으로 표시되는 칸)을 클릭한 뒤 양식 미리보기의 셀을 누르면 위치가 자동으로 들어갑니다.</p>
+    <div class="grid-wrap" id="tplGridWrap" hidden><table class="grid pickable" id="tplGrid"></table></div>
+  </section>
+
+  <!-- 2. 측정 데이터 -->
+  <section>
+    <h2><span class="step">2</span>3차원 측정 결과 파일</h2>
+    <div class="drop" id="srcDrop">
+      측정 결과 파일을 끌어다 놓거나 클릭해서 선택 (xlsx · xls · csv · txt, 여러 개 = 시료 1, 2, 3…)
+      <input type="file" id="srcFile" accept=".xlsx,.xls,.csv,.txt,.tsv,.prn" multiple>
+    </div>
+    <ul class="files" id="srcNames"></ul>
+    <div class="row" style="margin-top:10px">
+      <label class="f">제목(헤더) 행 번호<input type="number" id="srcHeader" min="1" style="width:110px"></label>
+      <label class="f">데이터 끝 표시 무시<select id="srcSkip">
+        <option value="empty">측정값이 빈 행 건너뛰기</option>
+        <option value="none">모든 행 사용</option>
+      </select></label>
+    </div>
+    <p class="hint">PC-DMIS·Calypso 등에서 내보낸 표 형식(엑셀/CSV/텍스트)을 읽습니다. 제목 행은 자동으로 찾으며, 틀리면 직접 번호를 고치면 됩니다.</p>
+    <div class="tabs" id="srcTabs"></div>
+    <div class="grid-wrap" id="srcGridWrap" hidden><table class="grid" id="srcGrid"></table></div>
+  </section>
+
+  <!-- 3. 매핑 -->
+  <section>
+    <h2><span class="step">3</span>어디에 넣을지 지정</h2>
+    <div class="row">
+      <label class="f">양식에 데이터 시작 행<input type="number" id="startRow" min="1" style="width:110px" class="addr" data-kind="row"></label>
+      <label class="f">양식 마지막 데이터 행 (선택)<input type="number" id="endRow" min="1" style="width:110px" class="addr" data-kind="row"></label>
+      <label class="chk"><input type="checkbox" id="growRows" checked>행이 모자라면 마지막 행 서식을 복사해서 추가</label>
+    </div>
+    <p class="hint">각 항목마다 <b>측정 파일의 어떤 열</b>을 <b>양식의 어떤 열</b>에 넣을지 고릅니다. 양식 열을 비워두면 그 항목은 넣지 않습니다.</p>
+    <div class="map" id="mapGrid" style="margin-top:12px"></div>
+
+    <h2 style="margin-top:20px; font-size:14px">판정</h2>
+    <div class="row">
+      <label class="f">판정 방법<select id="judgeMode">
+        <option value="calc">기준값 ± 공차로 자동 계산</option>
+        <option value="source">측정 파일의 판정 그대로</option>
+      </select></label>
+      <label class="f">합격 표시<input type="text" id="okText" value="OK" style="width:90px"></label>
+      <label class="f">불합격 표시<input type="text" id="ngText" value="NG" style="width:90px"></label>
+      <label class="chk"><input type="checkbox" id="ngRed" checked>불합격 측정값은 빨간 글씨</label>
+    </div>
+
+    <h2 style="margin-top:20px; font-size:14px">머리글 칸 (품명, 품번, 날짜 등)</h2>
+    <div id="headerFields" class="map"></div>
+    <div class="row" style="margin-top:8px"><button id="addHeader" type="button">+ 머리글 칸 추가</button></div>
+
+    <h2 style="margin-top:20px; font-size:14px">설정 저장</h2>
+    <div class="row">
+      <label class="f">설정 이름<input type="text" id="presetName" placeholder="예: A사 성적서" style="width:180px"></label>
+      <button type="button" id="savePreset">저장</button>
+      <label class="f">저장된 설정<select id="presetList"><option value="">—</option></select></label>
+      <button type="button" id="loadPreset">불러오기</button>
+      <button type="button" id="delPreset">삭제</button>
+      <button type="button" id="exportPreset">파일로 내보내기</button>
+      <label class="f" style="cursor:pointer"><span>파일에서 가져오기</span><input type="file" id="importPreset" accept=".json"></label>
+    </div>
+    <p class="hint">설정은 이 브라우저에 저장됩니다. 한 번 맞춰두면 다음부터는 파일만 올리고 바로 변환하면 됩니다.</p>
+  </section>
+
+  <!-- 4. 결과 -->
+  <section>
+    <h2><span class="step">4</span>미리보기 · 다운로드</h2>
+    <div class="row">
+      <label class="f">저장 파일 이름<input type="text" id="outName" placeholder="성적서_결과" style="width:220px"></label>
+      <button type="button" id="previewBtn">미리보기</button>
+      <button type="button" class="primary" id="runBtn" disabled>엑셀 만들기</button>
+    </div>
+    <div class="msg" id="msg"></div>
+    <div class="grid-wrap" id="outGridWrap" hidden><table class="grid" id="outGrid"></table></div>
+  </section>
+</div>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+
+// ---------- 상태 ----------
+const state = {
+  tplBuf: null, tplName: '', tplWb: null,
+  sources: [],          // [{name, rows: any[][], headerIdx}]
+  activeSrc: 0,
+  activeAddr: null,     // 셀 선택 대상 input
+};
+
+// 측정 데이터 필드 정의. kind: col(양식 열) / multi(시료별 열 여러 개)
+const FIELDS = [
+  { key: 'no',      label: '번호',        re: /^(no\.?|번호|순번|#|item\s*no|char.*no|balloon|풍선)$|^no\b|번호/i },
+  { key: 'name',    label: '측정 항목',   re: /항목|특성|명칭|요소|feature|charact|descr|name|planid|label|dimension/i },
+  { key: 'nominal', label: '기준값',      re: /기준|도면|설계|규격값|nominal|^nom|target|목표/i },
+  { key: 'upper',   label: '상한 공차',   re: /상한|upper|\+\s*tol|utol|\+공차|plus|max\s*tol|^\+$/i },
+  { key: 'lower',   label: '하한 공차',   re: /하한|lower|-\s*tol|ltol|-공차|minus|min\s*tol|^-$/i },
+  { key: 'tol',     label: '공차 (±0.05 형식 한 칸)', re: /^(공차|tol|tolerance)$/i },
+  { key: 'actual',  label: '측정값',      re: /측정값|실측|결과값|actual|meas|measured|^act|^value$|^측정$/i, multi: true },
+  { key: 'dev',     label: '편차',        re: /편차|오차|dev/i, multi: true },
+  { key: 'judge',   label: '판정',        re: /판정|result|status|pass|ok\/ng|out\s*tol|합부/i },
+];
+
+const DEFAULT_HEADERS = [
+  { label: '품명', addr: '', value: '' },
+  { label: '품번', addr: '', value: '' },
+  { label: '측정일', addr: '', value: new Date().toISOString().slice(0, 10) },
+  { label: '측정자', addr: '', value: '' },
+];
+let headerFields = DEFAULT_HEADERS.map(h => ({ ...h }));
+
+// ---------- 유틸 ----------
+function colToNum(c) { let n = 0; for (const ch of String(c).toUpperCase()) { if (ch < 'A' || ch > 'Z') return 0; n = n * 26 + ch.charCodeAt(0) - 64; } return n; }
+function numToCol(n) { let s = ''; while (n > 0) { const m = (n - 1) % 26; s = String.fromCharCode(65 + m) + s; n = Math.floor((n - 1) / 26); } return s; }
+function parseCols(s) { return String(s || '').toUpperCase().split(/[\s,;]+/).map(x => x.trim()).filter(x => /^[A-Z]{1,3}$/.test(x)); }
+function toNum(v) {
+  if (v === null || v === undefined || v === '') return null;
+  if (typeof v === 'number') return isFinite(v) ? v : null;
+  const s = String(v).replace(/,/g, '').replace(/[−–]/g, '-').trim();
+  if (!/^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/i.test(s)) return null;
+  return parseFloat(s);
+}
+function cellText(v) {
+  if (v === null || v === undefined) return '';
+  if (typeof v === 'object') {
+    if (v instanceof Date) return v.toISOString().slice(0, 10);
+    if (v.richText) return v.richText.map(t => t.text).join('');
+    if ('result' in v) return cellText(v.result);
+    if (v.formula) return '=' + v.formula;
+    if (v.text) return v.text;
+    if (v.error) return v.error;
+  }
+  return String(v);
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+function setMsg(text, cls) { const m = $('msg'); m.textContent = text; m.className = 'msg ' + (cls || ''); }
+
+// "±0.05", "+0.1/-0.05", "+0.1 -0.05", "0/-0.1" 등을 상·하한으로
+function parseTolString(v) {
+  if (v === null || v === undefined || v === '') return null;
+  const n = toNum(v); if (n !== null) return { upper: Math.abs(n), lower: -Math.abs(n) };
+  const s = String(v).replace(/\s+/g, '').replace(/[−–]/g, '-');
+  let m = s.match(/^±([\d.]+)$/); if (m) return { upper: +m[1], lower: -m[1] };
+  m = s.match(/^([+-]?[\d.]+)[\/~,]?([+-][\d.]+)$/);
+  if (m) { const a = +m[1], b = +m[2]; return { upper: Math.max(a, b), lower: Math.min(a, b) }; }
+  return null;
+}
+
+// ---------- 파일 드롭 ----------
+function bindDrop(dropId, inputId, handler) {
+  const d = $(dropId), inp = $(inputId);
+  d.addEventListener('click', () => inp.click());
+  d.addEventListener('dragover', e => { e.preventDefault(); d.classList.add('over'); });
+  d.addEventListener('dragleave', () => d.classList.remove('over'));
+  d.addEventListener('drop', e => { e.preventDefault(); d.classList.remove('over'); handler([...e.dataTransfer.files]); });
+  inp.addEventListener('change', () => { handler([...inp.files]); inp.value = ''; });
+}
+
+// ---------- 1. 양식 ----------
+async function loadTemplate(files) {
+  const f = files[0]; if (!f) return;
+  if (!/\.xlsx$/i.test(f.name)) { setMsg('양식은 .xlsx 형식이어야 합니다. .xls 라면 엑셀에서 "다른 이름으로 저장 → .xlsx"로 바꿔주세요.', 'err'); return; }
+  try {
+    state.tplBuf = await f.arrayBuffer();
+    state.tplName = f.name;
+    state.tplWb = new ExcelJS.Workbook();
+    await state.tplWb.xlsx.load(state.tplBuf.slice(0));
+  } catch (e) { setMsg('양식 파일을 읽지 못했습니다: ' + e.message, 'err'); return; }
+  $('tplName').innerHTML = `<li>${esc(f.name)}</li>`;
+  const sel = $('tplSheet'); sel.innerHTML = '';
+  state.tplWb.worksheets.forEach(ws => { const o = document.createElement('option'); o.value = ws.name; o.textContent = ws.name; sel.appendChild(o); });
+  sel.disabled = false;
+  const pending = sel.dataset.want; if (pending && state.tplWb.getWorksheet(pending)) sel.value = pending;
+  if (!$('outName').value) $('outName').value = f.name.replace(/\.xlsx$/i, '') + '_작성';
+  renderTemplateGrid();
+  updateRunBtn();
+}
+
+function renderTemplateGrid() {
+  const ws = state.tplWb && state.tplWb.getWorksheet($('tplSheet').value);
+  if (!ws) return;
+  const maxR = Math.min(Math.max(ws.rowCount, 30), 150);
+  const maxC = Math.min(Math.max(ws.columnCount, 12), 40);
+  let h = '<tr><th></th>';
+  for (let c = 1; c <= maxC; c++) h += `<th>${numToCol(c)}</th>`;
+  h += '</tr>';
+  const start = +$('startRow').value || 0;
+  for (let r = 1; r <= maxR; r++) {
+    h += `<tr${r === start ? ' class="hdr"' : ''}><td class="rh">${r}</td>`;
+    const row = ws.getRow(r);
+    for (let c = 1; c <= maxC; c++) {
+      const cell = row.getCell(c);
+      const t = cell.isMerged && cell.master !== cell ? '' : cellText(cell.value);
+      h += `<td data-r="${r}" data-c="${c}" title="${esc(numToCol(c) + r + (t ? ': ' + t : ''))}">${esc(t)}</td>`;
+    }
+    h += '</tr>';
+  }
+  $('tplGrid').innerHTML = h;
+  $('tplGridWrap').hidden = false;
+}
+
+$('tplGrid').addEventListener('click', e => {
+  const td = e.target.closest('td[data-r]'); if (!td) return;
+  const inp = state.activeAddr; if (!inp) return;
+  const r = +td.dataset.r, c = numToCol(+td.dataset.c);
+  const kind = inp.dataset.kind;
+  if (kind === 'row') inp.value = r;
+  else if (kind === 'col') inp.value = c;
+  else if (kind === 'cols') inp.value = inp.value ? inp.value.replace(/[,\s]*$/, '') + ',' + c : c;
+  else inp.value = c + r;
+  inp.dispatchEvent(new Event('input', { bubbles: true }));
+  if (kind === 'row') renderTemplateGrid();
+});
+document.addEventListener('focusin', e => {
+  if (e.target.classList && e.target.classList.contains('addr')) {
+    document.querySelectorAll('input.addr.active').forEach(x => x.classList.remove('active'));
+    e.target.classList.add('active');
+    state.activeAddr = e.target;
+  }
+});
+
+// ---------- 2. 측정 데이터 ----------
+async function readTextSmart(buf) {
+  try { return new TextDecoder('utf-8', { fatal: true }).decode(buf); }
+  catch { return new TextDecoder('euc-kr').decode(buf); }
+}
+function parseDelimited(text) {
+  const lines = text.replace(/^\uFEFF/, '').split(/\r?\n/);
+  const sample = lines.slice(0, 50).join('\n');
+  const counts = { '\t': (sample.match(/\t/g) || []).length, ';': (sample.match(/;/g) || []).length, ',': (sample.match(/,/g) || []).length };
+  let delim = Object.keys(counts).sort((a, b) => counts[b] - counts[a])[0];
+  if (!counts[delim]) delim = null; // 공백으로 정렬된 텍스트
+  return lines.filter(l => l.trim() !== '').map(l => {
+    if (!delim) return l.trim().split(/\s{2,}|\s+(?=[+-]?\d)/);
+    if (delim !== ',') return l.split(delim).map(s => s.trim());
+    const out = []; let cur = '', q = false;
+    for (let i = 0; i < l.length; i++) {
+      const ch = l[i];
+      if (q) { if (ch === '"' && l[i + 1] === '"') { cur += '"'; i++; } else if (ch === '"') q = false; else cur += ch; }
+      else if (ch === '"') q = true; else if (ch === ',') { out.push(cur.trim()); cur = ''; } else cur += ch;
+    }
+    out.push(cur.trim()); return out;
+  });
+}
+function detectHeader(rows) {
+  let best = -1, bestScore = 0;
+  for (let i = 0; i < Math.min(rows.length, 40); i++) {
+    const r = rows[i] || [];
+    let score = 0;
+    for (const v of r) { const s = cellText(v).trim(); if (s && FIELDS.some(f => f.re.test(s))) score++; }
+    if (score > bestScore) { bestScore = score; best = i; }
+  }
+  return bestScore >= 2 ? best : 0;
+}
+async function loadSources(files) {
+  if (!files.length) return;
+  const added = [];
+  for (const f of files) {
+    try {
+      const buf = await f.arrayBuffer();
+      let rows;
+      if (/\.(xlsx|xls)$/i.test(f.name)) {
+        const wb = XLSX.read(buf, { type: 'array', cellDates: true });
+        const ws = wb.Sheets[wb.SheetNames[0]];
+        rows = XLSX.utils.sheet_to_json(ws, { header: 1, raw: true, defval: '' });
+      } else {
+        rows = parseDelimited(await readTextSmart(buf));
+      }
+      added.push({ name: f.name, rows, headerIdx: detectHeader(rows) });
+    } catch (e) { setMsg(`${f.name} 을(를) 읽지 못했습니다: ${e.message}`, 'err'); }
+  }
+  added.sort((a, b) => a.name.localeCompare(b.name, 'ko', { numeric: true }));
+  state.sources = state.sources.concat(added);
+  state.activeSrc = 0;
+  renderSources();
+  autoMap();
+  updateRunBtn();
+}
+function srcHeaders(src) {
+  const hdr = src.rows[src.headerIdx] || [];
+  const width = Math.max(hdr.length, ...src.rows.slice(src.headerIdx, src.headerIdx + 30).map(r => r.length));
+  const out = [];
+  for (let c = 0; c < width; c++) { const t = cellText(hdr[c]).trim(); out.push(t || `열 ${numToCol(c + 1)}`); }
+  return out;
+}
+function renderSources() {
+  $('srcNames').innerHTML = state.sources.map((s, i) => `<li>시료 ${i + 1}: ${esc(s.name)} <a href="#" data-del="${i}" title="빼기">✕</a></li>`).join('');
+  $('srcTabs').innerHTML = state.sources.length > 1
+    ? state.sources.map((s, i) => `<button type="button" data-tab="${i}" class="${i === state.activeSrc ? 'on' : ''}">시료 ${i + 1}</button>`).join('') : '';
+  const src = state.sources[state.activeSrc];
+  if (!src) { $('srcGridWrap').hidden = true; $('srcHeader').value = ''; return; }
+  $('srcHeader').value = src.headerIdx + 1;
+  const width = Math.min(Math.max(...src.rows.slice(0, 200).map(r => r.length), 1), 40);
+  let h = '<tr><th></th>'; for (let c = 1; c <= width; c++) h += `<th>${numToCol(c)}</th>`; h += '</tr>';
+  src.rows.slice(0, 200).forEach((r, i) => {
+    h += `<tr${i === src.headerIdx ? ' class="hdr"' : ''}><td class="rh">${i + 1}</td>`;
+    for (let c = 0; c < width; c++) h += `<td>${esc(cellText(r[c]))}</td>`;
+    h += '</tr>';
+  });
+  $('srcGrid').innerHTML = h;
+  $('srcGridWrap').hidden = false;
+}
+$('srcNames').addEventListener('click', e => {
+  const a = e.target.closest('[data-del]'); if (!a) return; e.preventDefault();
+  state.sources.splice(+a.dataset.del, 1); state.activeSrc = 0; renderSources(); refreshSourceSelects(); updateRunBtn();
+});
+$('srcTabs').addEventListener('click', e => { const b = e.target.closest('[data-tab]'); if (!b) return; state.activeSrc = +b.dataset.tab; renderSources(); });
+$('srcHeader').addEventListener('change', () => {
+  const src = state.sources[state.activeSrc]; if (!src) return;
+  const v = Math.max(1, +$('srcHeader').value || 1) - 1;
+  state.sources.forEach(s => s.headerIdx = v); // 같은 장비 출력이면 모두 같은 위치
+  renderSources(); autoMap();
+});
+
+// ---------- 3. 매핑 UI ----------
+function renderMapGrid() {
+  $('mapGrid').innerHTML = FIELDS.map(f => `
+    <div class="card">
+      <b>${f.label}</b>
+      <label class="f">측정 파일의 열<select data-src="${f.key}"><option value="">(사용 안 함)</option></select></label>
+      <label class="f">${f.multi ? '양식의 열 (시료 순서대로, 쉼표로 구분 · 예: G,H,I)' : '양식의 열 (예: C)'}
+        <input type="text" class="addr" data-kind="${f.multi ? 'cols' : 'col'}" data-dst="${f.key}" style="width:${f.multi ? '100%' : '90px'}"></label>
+    </div>`).join('');
+}
+function refreshSourceSelects(keep) {
+  const src = state.sources[0];
+  const hdrs = src ? srcHeaders(src) : [];
+  document.querySelectorAll('select[data-src]').forEach(sel => {
+    const prev = keep && keep[sel.dataset.src] !== undefined ? keep[sel.dataset.src] : sel.value;
+    sel.innerHTML = '<option value="">(사용 안 함)</option>' + hdrs.map((h, i) => `<option value="${i}">${esc(numToCol(i + 1))} · ${esc(h)}</option>`).join('');
+    // 저장된 설정은 제목 이름으로 기억 → 이름이 같으면 그 열, 없으면 번호
+    let idx = '';
+    if (typeof prev === 'string' && prev.startsWith('name:')) { const n = prev.slice(5); const i = hdrs.indexOf(n); idx = i >= 0 ? String(i) : ''; }
+    else if (prev !== '' && prev !== undefined && +prev < hdrs.length) idx = String(prev);
+    sel.value = idx;
+  });
+}
+function autoMap() {
+  const src = state.sources[0]; if (!src) return;
+  const hdrs = srcHeaders(src);
+  const keep = {};
+  document.querySelectorAll('select[data-src]').forEach(sel => { if (sel.value !== '') keep[sel.dataset.src] = sel.value; });
+  const used = new Set(Object.values(keep).map(String));
+  // 순서가 중요: 측정값/편차/판정을 먼저 잡고 남은 것에서 항목명
+  for (const key of ['actual', 'dev', 'judge', 'upper', 'lower', 'nominal', 'tol', 'no', 'name']) {
+    if (keep[key] !== undefined) continue;
+    const f = FIELDS.find(x => x.key === key);
+    const i = hdrs.findIndex((h, j) => !used.has(String(j)) && !/^열 [A-Z]+$/.test(h) && f.re.test(h));
+    if (i >= 0) { keep[key] = String(i); used.add(String(i)); }
+  }
+  refreshSourceSelects(keep);
+}
+
+function renderHeaderFields() {
+  $('headerFields').innerHTML = headerFields.map((h, i) => `
+    <div class="card">
+      <div class="row"><input type="text" data-hl="${i}" value="${esc(h.label)}" placeholder="이름" style="flex:1">
+        <button type="button" data-hdel="${i}" title="삭제">✕</button></div>
+      <div class="row">
+        <label class="f">양식 셀<input type="text" class="addr" data-kind="cell" data-ha="${i}" value="${esc(h.addr)}" placeholder="C3"></label>
+        <label class="f" style="flex:1">넣을 내용<input type="text" data-hv="${i}" value="${esc(h.value)}"></label>
+      </div>
+    </div>`).join('');
+}
+$('headerFields').addEventListener('input', e => {
+  const t = e.target;
+  if (t.dataset.hl !== undefined) headerFields[+t.dataset.hl].label = t.value;
+  if (t.dataset.ha !== undefined) headerFields[+t.dataset.ha].addr = t.value.toUpperCase().trim();
+  if (t.dataset.hv !== undefined) headerFields[+t.dataset.hv].value = t.value;
+});
+$('headerFields').addEventListener('click', e => {
+  const b = e.target.closest('[data-hdel]'); if (!b) return;
+  headerFields.splice(+b.dataset.hdel, 1); renderHeaderFields();
+});
+$('addHeader').addEventListener('click', () => { headerFields.push({ label: '', addr: '', value: '' }); renderHeaderFields(); });
+
+// ---------- 설정 저장 ----------
+function collectConfig() {
+  const src0 = state.sources[0]; const hdrs = src0 ? srcHeaders(src0) : [];
+  const map = {};
+  FIELDS.forEach(f => {
+    const sel = document.querySelector(`select[data-src="${f.key}"]`);
+    const dst = document.querySelector(`input[data-dst="${f.key}"]`).value.toUpperCase().trim();
+    let s = sel.value;
+    if (s !== '' && hdrs[+s] && !/^열 [A-Z]+$/.test(hdrs[+s])) s = 'name:' + hdrs[+s];
+    map[f.key] = { src: s, dst };
+  });
+  return {
+    sheet: $('tplSheet').value,
+    startRow: +$('startRow').value || null,
+    endRow: +$('endRow').value || null,
+    growRows: $('growRows').checked,
+    headerRow: +$('srcHeader').value || null,
+    skip: $('srcSkip').value,
+    judgeMode: $('judgeMode').value, okText: $('okText').value, ngText: $('ngText').value, ngRed: $('ngRed').checked,
+    map,
+    headers: headerFields.map(h => ({ label: h.label, addr: h.addr, value: /날짜|일자|측정일|date/i.test(h.label) ? '' : h.value })),
+  };
+}
+function applyConfig(c) {
+  if (!c) return;
+  if (c.sheet) { $('tplSheet').dataset.want = c.sheet; if ([...$('tplSheet').options].some(o => o.value === c.sheet)) $('tplSheet').value = c.sheet; }
+  $('startRow').value = c.startRow || ''; $('endRow').value = c.endRow || '';
+  $('growRows').checked = c.growRows !== false;
+  $('srcSkip').value = c.skip || 'empty';
+  $('judgeMode').value = c.judgeMode || 'calc'; $('okText').value = c.okText ?? 'OK'; $('ngText').value = c.ngText ?? 'NG';
+  $('ngRed').checked = c.ngRed !== false;
+  if (c.headerRow && state.sources.length) { state.sources.forEach(s => s.headerIdx = c.headerRow - 1); renderSources(); }
+  const keep = {};
+  FIELDS.forEach(f => {
+    const m = (c.map || {})[f.key] || {};
+    document.querySelector(`input[data-dst="${f.key}"]`).value = m.dst || '';
+    keep[f.key] = m.src ?? '';
+  });
+  state.pendingMap = keep;
+  refreshSourceSelects(keep);
+  if (c.headers) {
+    const today = new Date().toISOString().slice(0, 10);
+    headerFields = c.headers.map(h => ({ ...h, value: h.value || (/날짜|일자|측정일|date/i.test(h.label) ? today : '') }));
+    renderHeaderFields();
+  }
+  if (state.tplWb) renderTemplateGrid();
+}
+const PKEY = 'cmm-report-presets';
+function loadPresets() { try { return JSON.parse(localStorage.getItem(PKEY)) || {}; } catch { return {}; } }
+function savePresets(p) { try { localStorage.setItem(PKEY, JSON.stringify(p)); return true; } catch { return false; } }
+function renderPresetList(sel) {
+  const p = loadPresets();
+  $('presetList').innerHTML = '<option value="">—</option>' + Object.keys(p).map(k => `<option>${esc(k)}</option>`).join('');
+  if (sel) $('presetList').value = sel;
+}
+$('savePreset').addEventListener('click', () => {
+  const name = $('presetName').value.trim() || $('presetList').value || '기본';
+  const p = loadPresets(); p[name] = collectConfig();
+  if (savePresets(p)) { try { localStorage.setItem(PKEY + ':last', name); } catch {} renderPresetList(name); setMsg(`"${name}" 설정을 저장했습니다.`, 'ok'); }
+  else setMsg('이 브라우저에서는 저장할 수 없습니다. "파일로 내보내기"를 사용하세요.', 'err');
+});
+$('loadPreset').addEventListener('click', () => {
+  const name = $('presetList').value; if (!name) return;
+  applyConfig(loadPresets()[name]); $('presetName').value = name;
+  try { localStorage.setItem(PKEY + ':last', name); } catch {}
+  setMsg(`"${name}" 설정을 불러왔습니다.`, 'ok');
+});
+$('delPreset').addEventListener('click', () => {
+  const name = $('presetList').value; if (!name || !confirm(`"${name}" 설정을 삭제할까요?`)) return;
+  const p = loadPresets(); delete p[name]; savePresets(p); renderPresetList();
+});
+$('exportPreset').addEventListener('click', () => {
+  const name = $('presetName').value.trim() || '성적서설정';
+  const blob = new Blob([JSON.stringify({ name, config: collectConfig() }, null, 2)], { type: 'application/json' });
+  downloadBlob(blob, name + '.json');
+});
+$('importPreset').addEventListener('change', async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const j = JSON.parse(await f.text());
+    applyConfig(j.config || j); $('presetName').value = j.name || f.name.replace(/\.json$/i, '');
+    setMsg('설정 파일을 불러왔습니다.', 'ok');
+  } catch (err) { setMsg('설정 파일 형식이 올바르지 않습니다.', 'err'); }
+  e.target.value = '';
+});
+
+// ---------- 변환 ----------
+function getMapping() {
+  const m = {};
+  FIELDS.forEach(f => {
+    const sel = document.querySelector(`select[data-src="${f.key}"]`);
+    const dst = document.querySelector(`input[data-dst="${f.key}"]`).value;
+    m[f.key] = { src: sel.value === '' ? null : +sel.value, dst: f.multi ? parseCols(dst) : (parseCols(dst)[0] || null) };
+  });
+  return m;
+}
+function extractRows(src, m) {
+  const out = [];
+  for (let i = src.headerIdx + 1; i < src.rows.length; i++) {
+    const r = src.rows[i] || [];
+    const g = k => (m[k].src === null ? '' : r[m[k].src]);
+    const rec = { no: g('no'), name: g('name'), nominal: g('nominal'), upper: g('upper'), lower: g('lower'), tol: g('tol'), actual: g('actual'), dev: g('dev'), judge: g('judge') };
+    const allEmpty = Object.values(rec).every(v => cellText(v).trim() === '');
+    if (allEmpty) continue;
+    if ($('srcSkip').value === 'empty' && m.actual.src !== null && cellText(rec.actual).trim() === '') continue;
+    out.push(rec);
+  }
+  return out;
+}
+function judgeOne(rec, actualVal) {
+  const a = toNum(actualVal); if (a === null) return null;
+  const nom = toNum(rec.nominal);
+  let up = toNum(rec.upper), lo = toNum(rec.lower);
+  if (up === null && lo === null) { const t = parseTolString(rec.tol); if (t) { up = t.upper; lo = t.lower; } }
+  if (up === null && lo === null) return null;
+  const eps = 1e-9;
+  if (nom === null) { // 평면도·위치도 등 기하공차: 측정값 ≤ 상한
+    return up !== null ? a <= up + eps : null;
+  }
+  // 공차가 절대값(상한값/하한값)으로 적힌 경우 감지: |공차| 가 기준값에 가까우면 절대 한계로 본다
+  const absolute = (up !== null && Math.abs(nom) > 0 && Math.abs(up - nom) < Math.abs(up) * 0.5 && Math.abs(up) > 1);
+  const hi = up === null ? Infinity : (absolute ? up : nom + up);
+  const loL = lo === null ? -Infinity : (absolute ? lo : nom + (lo > 0 ? -lo : lo));
+  return a <= hi + eps && a >= loL - eps;
+}
+function buildPlan() {
+  const m = getMapping();
+  const errs = [];
+  if (!state.tplWb) errs.push('성적서 양식을 올려주세요.');
+  if (!state.sources.length) errs.push('측정 결과 파일을 올려주세요.');
+  if (!+$('startRow').value) errs.push('양식에 데이터 시작 행을 지정해주세요.');
+  if (errs.length) return { errs };
+
+  const base = extractRows(state.sources[0], m);
+  const samples = state.sources.map(s => extractRows(s, m));
+  // 시료가 여러 개면 항목명(또는 번호)으로 맞춰서 측정값을 가져옴
+  const keyOf = r => cellText(r.name).trim() || cellText(r.no).trim();
+  const lookups = samples.map(rows => { const mp = new Map(); rows.forEach((r, i) => { const k = keyOf(r); if (k && !mp.has(k)) mp.set(k, r); }); return mp; });
+  const plan = base.map((rec, i) => {
+    const per = samples.map((rows, si) => {
+      const k = keyOf(rec);
+      const r = (k && lookups[si].get(k)) || rows[i] || {};
+      return { actual: r.actual, dev: r.dev, judge: r.judge };
+    });
+    const results = per.map(p => judgeOne(rec, p.actual));
+    let judge;
+    if ($('judgeMode').value === 'source') {
+      const anyNg = per.some(p => /ng|불|fail|out|×|x/i.test(cellText(p.judge)));
+      judge = per.every(p => cellText(p.judge).trim() === '') ? null : !anyNg;
+    } else judge = results.every(x => x === null) ? null : results.every(x => x !== false);
+    return { rec, per, results, judge };
+  });
+  const warn = [];
+  if (m.actual.dst.length && state.sources.length > m.actual.dst.length) warn.push(`측정 파일이 ${state.sources.length}개인데 측정값 열은 ${m.actual.dst.length}개만 지정되어 있어 나머지 시료는 넣지 않습니다.`);
+  if (!m.actual.dst.length) warn.push('측정값을 넣을 양식 열이 지정되지 않았습니다.');
+  return { m, plan, warn, errs: [] };
+}
+
+function previewTable(plan, m) {
+  const n = Math.max(1, Math.min(state.sources.length, Math.max(1, m.actual.dst.length)));
+  let h = '<tr><th>번호</th><th>항목</th><th>기준값</th><th>상한</th><th>하한</th>';
+  for (let i = 0; i < n; i++) h += `<th>측정값 ${n > 1 ? i + 1 : ''}</th>`;
+  h += '<th>판정</th></tr>';
+  plan.forEach(p => {
+    const t = parseTolString(p.rec.tol) || {};
+    h += `<tr><td>${esc(cellText(p.rec.no))}</td><td>${esc(cellText(p.rec.name))}</td><td>${esc(cellText(p.rec.nominal))}</td>
+      <td>${esc(cellText(p.rec.upper) || (t.upper ?? ''))}</td><td>${esc(cellText(p.rec.lower) || (t.lower ?? ''))}</td>`;
+    for (let i = 0; i < n; i++) { const pp = p.per[i] || {}; h += `<td class="${p.results[i] === false ? 'ng' : ''}">${esc(cellText(pp.actual))}</td>`; }
+    h += `<td class="${p.judge === false ? 'ng' : p.judge ? 'ok' : ''}">${p.judge === null ? '' : p.judge ? esc($('okText').value) : esc($('ngText').value)}</td></tr>`;
+  });
+  $('outGrid').innerHTML = h; $('outGridWrap').hidden = false;
+}
+
+$('previewBtn').addEventListener('click', () => {
+  const r = buildPlan();
+  if (r.errs.length) { setMsg(r.errs.join(' '), 'err'); return; }
+  previewTable(r.plan, r.m);
+  const ng = r.plan.filter(p => p.judge === false).length;
+  setMsg(`${r.plan.length}개 항목, 시료 ${state.sources.length}개` + (ng ? ` · 불합격 ${ng}개` : ' · 전부 합격') + (r.warn.length ? ' · ' + r.warn.join(' ') : ''), r.warn.length ? 'err' : 'ok');
+});
+
+function writeVal(cell, v) {
+  const n = toNum(v);
+  if (n !== null) cell.value = n;
+  else if (v instanceof Date) cell.value = v;
+  else { const s = cellText(v); cell.value = s === '' ? null : s; }
+}
+
+$('runBtn').addEventListener('click', async () => {
+  const r = buildPlan();
+  if (r.errs.length) { setMsg(r.errs.join(' '), 'err'); return; }
+  const { m, plan } = r;
+  try {
+    const wb = new ExcelJS.Workbook();
+    await wb.xlsx.load(state.tplBuf.slice(0));
+    const ws = wb.getWorksheet($('tplSheet').value);
+    const start = +$('startRow').value;
+    const end = +$('endRow').value || null;
+
+    if (end && $('growRows').checked) {
+      const capacity = end - start + 1;
+      const extra = plan.length - capacity;
+      if (extra > 0) ws.duplicateRow(end, extra, true);
+    }
+
+    headerFields.forEach(h => { if (/^[A-Z]{1,3}\d+$/.test(h.addr) && h.value !== '') writeVal(ws.getCell(h.addr), h.value); });
+
+    const ok = $('okText').value, ng = $('ngText').value, red = $('ngRed').checked;
+    plan.forEach((p, i) => {
+      const row = start + i;
+      const put = (col, v) => { if (col) writeVal(ws.getCell(col + row), v); };
+      put(m.no.dst, p.rec.no);
+      put(m.name.dst, p.rec.name);
+      put(m.nominal.dst, p.rec.nominal);
+      let up = p.rec.upper, lo = p.rec.lower;
+      if (cellText(up) === '' && cellText(lo) === '') { const t = parseTolString(p.rec.tol); if (t) { up = t.upper; lo = t.lower; } }
+      put(m.upper.dst, up);
+      put(m.lower.dst, lo);
+      put(m.tol.dst, p.rec.tol);
+      m.actual.dst.forEach((col, si) => {
+        if (!p.per[si]) return;
+        const cell = ws.getCell(col + row);
+        writeVal(cell, p.per[si].actual);
+        if (red && p.results[si] === false) paintRed(cell);
+      });
+      m.dev.dst.forEach((col, si) => { if (p.per[si]) put(col, p.per[si].dev); });
+      if (m.judge.dst && p.judge !== null) {
+        const cell = ws.getCell(m.judge.dst + row);
+        cell.value = p.judge ? ok : ng;
+        if (red && !p.judge) paintRed(cell);
+      }
+    });
+
+    const buf = await wb.xlsx.writeBuffer();
+    const name = ($('outName').value.trim() || '성적서_결과').replace(/\.xlsx$/i, '') + '.xlsx';
+    downloadBlob(new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }), name);
+    previewTable(plan, m);
+    const ngCnt = plan.filter(p => p.judge === false).length;
+    let note = `${name} 을(를) 만들었습니다. ${plan.length}개 항목` + (ngCnt ? `, 불합격 ${ngCnt}개.` : ', 전부 합격.');
+    if (end && !$('growRows').checked && plan.length > end - start + 1) note += ` 주의: 양식 칸(${end - start + 1}행)보다 항목이 많아 아래로 넘쳤습니다.`;
+    if (r.warn.length) note += ' ' + r.warn.join(' ');
+    setMsg(note, r.warn.length ? 'err' : 'ok');
+  } catch (e) {
+    console.error(e); setMsg('엑셀을 만드는 중 오류가 났습니다: ' + e.message, 'err');
+  }
+});
+
+// 양식 셀끼리 서식 객체를 공유하므로 복사한 뒤 바꿔야 다른 칸까지 빨개지지 않음
+function paintRed(cell) {
+  const st = JSON.parse(JSON.stringify(cell.style || {}));
+  st.font = { ...(st.font || {}), color: { argb: 'FFFF0000' }, bold: true };
+  cell.style = st;
+}
+function downloadBlob(blob, name) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob); a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+}
+function updateRunBtn() { $('runBtn').disabled = !(state.tplWb && state.sources.length); }
+
+// ---------- 시작 ----------
+renderMapGrid();
+renderHeaderFields();
+renderPresetList();
+bindDrop('tplDrop', 'tplFile', loadTemplate);
+bindDrop('srcDrop', 'srcFile', loadSources);
+$('tplSheet').addEventListener('change', renderTemplateGrid);
+$('startRow').addEventListener('change', renderTemplateGrid);
+if (typeof ExcelJS === 'undefined' || typeof XLSX === 'undefined') setMsg('엑셀 처리 라이브러리를 불러오지 못했습니다. 인터넷 연결을 확인하고 새로고침해주세요.', 'err');
+try {
+  const last = localStorage.getItem(PKEY + ':last');
+  const p = loadPresets();
+  if (last && p[last]) { applyConfig(p[last]); $('presetName').value = last; renderPresetList(last); }
+} catch {}
+</script>
+</body>
+</html>
