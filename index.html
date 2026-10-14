@@ -558,6 +558,45 @@
   .tag-tx-card .tx-acc { font-size: 13px; color: var(--ink-soft); }
   .tag-tx-card .tx-amt { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
 
+  /* OTT 구독 */
+  .ledger-col.ott-col { border-color: #ffffff; background: var(--cat-bg); }
+  .ledger-col.ott-col h2 .sub-total { color: var(--num-card); }
+  .ott-yearly { font-size: 11.5px; color: var(--ink-soft); margin: 0 0 4px; }
+  .ott-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 11px 4px; border-bottom: 1px solid var(--line); }
+  .ott-row:last-child { border-bottom: none; }
+  .ott-row.paused { opacity: 0.5; }
+  .ott-row .name-wrap { display: flex; flex-direction: column; min-width: 0; }
+  .ott-row .name { font-size: 14px; font-weight: 500; }
+  .ott-row .sub-cat { font-size: 11px; color: var(--ink-soft); margin-top: 1px; }
+  .ott-row .right { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+  .ott-row .amt { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; color: var(--num-card); }
+  .ott-row .ott-btn { background: none; border: 1px solid var(--line-strong); color: var(--ink-soft); font-family: inherit; font-size: 11px; padding: 2px 7px; border-radius: 10px; cursor: pointer; }
+  .ott-row .del-acct { background: none; border: none; color: var(--ink-soft); font-size: 14px; cursor: pointer; opacity: 0.5; }
+  .ott-row .del-acct:hover { opacity: 1; color: var(--liability); }
+  .ott-logo { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border-radius: 7px; font-size: 12px; font-weight: 800; color: #fff; flex-shrink: 0; }
+  .ott-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
+
+  /* 카테고리별 지출 요약 */
+  .cat-summary { border: 1px solid var(--line-strong); border-radius: 10px; padding: 14px; margin-bottom: 16px; background: var(--paper-raised); }
+  .cat-summary .sum-head { display: flex; justify-content: space-around; gap: 10px; margin-bottom: 12px; text-align: center; }
+  .cat-summary .sum-head .k { font-size: 11.5px; color: var(--ink-soft); margin-bottom: 3px; }
+  .cat-summary .sum-head .v { font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+  .cat-summary .sum-head .v.in { color: var(--asset); }
+  .cat-summary .sum-head .v.out { color: var(--liability); }
+  .cat-bar-row { padding: 7px 2px; cursor: pointer; border-radius: 4px; }
+  .cat-bar-row:hover { background: var(--paper); }
+  .cat-bar-top { display: flex; justify-content: space-between; align-items: baseline; font-size: 13px; margin-bottom: 4px; gap: 8px; }
+  .cat-bar-top .cat-name { font-weight: 600; color: var(--ink); }
+  .cat-bar-top .cat-pct { font-size: 11px; color: var(--ink-soft); margin-left: 4px; font-weight: 400; }
+  .cat-bar-top .cat-amt { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--ink); white-space: nowrap; }
+  .cat-bar { height: 6px; border-radius: 3px; background: var(--line); overflow: hidden; }
+  .cat-bar > span { display: block; height: 100%; border-radius: 3px; background: var(--focus); }
+  .cat-bar-row.ott .cat-bar > span { background: var(--liability); }
+  .cat-summary .sum-title { font-size: 12.5px; font-weight: 700; color: var(--ink); margin: 4px 0 6px; }
+  .cat-chips { display: flex; flex-wrap: wrap; gap: 5px; margin: -2px 0 8px; }
+  .cat-chip { font-family: inherit; font-size: 11.5px; padding: 4px 9px; border-radius: 12px; border: 1px solid var(--line-strong); background: var(--paper); color: var(--ink-soft); cursor: pointer; }
+  .cat-chip:hover { border-color: var(--focus); color: var(--ink); }
+
   /* 경조사노트 */
   .event-note-card {
     border: 1px solid var(--line-strong); border-radius: 8px;
@@ -762,6 +801,28 @@
           </div>
         </div>
       </div>
+
+      <div class="ledger-col ott-col">
+        <h2>OTT 구독 <span class="sub-total" id="ottColTotal">₩0/월</span></h2>
+        <div class="ott-yearly" id="ottYearly"></div>
+        <div id="ottList"></div>
+        <button class="add-btn" onclick="toggleForm('ott')">+ OTT 구독 추가</button>
+        <div class="add-form" id="form-ott">
+          <select id="ott-service" onchange="onOttServiceChange()"></select>
+          <input type="text" id="ott-custom-name" placeholder="서비스 이름 (예: 스포티비 나우)" style="display:none;">
+          <select id="ott-plan" onchange="onOttPlanChange()"></select>
+          <input type="number" id="ott-price" placeholder="월 요금 (원)">
+          <div class="add-form-hint">요금은 요금제 기본값이에요. 실제 결제 금액과 다르면 수정해주세요.</div>
+          <input type="date" id="ott-start">
+          <div class="add-form-hint">결제일 (이 날짜부터 매달 같은 날 결제)</div>
+          <select id="ott-account" onchange="this.dataset.touched = '1'"></select>
+          <div class="add-form-hint">결제 수단을 연결하면 결제일마다 내역이 자동으로 기록돼요.</div>
+          <div class="form-actions">
+            <button onclick="toggleForm('ott')">취소</button>
+            <button class="primary" onclick="addOttSub()">추가</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <section class="calendar-section">
@@ -778,7 +839,7 @@
   <!-- ===== 카테고리 (태그별 보기) ===== -->
   <div class="tab-page" id="page-category" style="display:none;">
     <h2 class="page-title">카테고리</h2>
-    <p class="page-sub">입금·출금별로 내역을 모아 보여줘요.</p>
+    <p class="page-sub">카테고리별 지출과 입금·출금 내역을 모아 보여줘요.</p>
     <div class="range-picker open" id="catRangePicker">
       <input type="date" id="catRangeStart">
       <span>~</span>
@@ -791,6 +852,7 @@
       <button class="cat-search-clear" onclick="clearCatSearch()" title="검색 지우기">✕</button>
     </div>
     <div class="cat-search-history" id="catSearchHistory"></div>
+    <div id="catSummary"></div>
     <div id="tagCategoryList"></div>
   </div>
 
@@ -920,7 +982,7 @@
         <option value="10">10개월 할부</option>
         <option value="12">12개월 할부</option>
       </select>
-      <input type="text" id="detailtx-tag" list="tagDatalist" placeholder="태그 (선택, 예: 식비)">
+      <input type="text" id="detailtx-tag" list="tagDatalist" placeholder="카테고리 (선택, 예: 식비·카페·OTT)">
       <div class="form-actions">
         <button onclick="toggleForm('detailtx')">취소</button>
         <button class="primary" onclick="addDetailTx()">추가</button>
@@ -1065,10 +1127,74 @@
       renderTagDatalist();
     }
   }
+  /* ---------- 2030 인기 지출/수입 카테고리 (키워드로 자동 분류) ---------- */
+  // 순서가 우선순위: 앞에 있는 카테고리 키워드가 먼저 매칭됨 (OTT를 쇼핑·구독보다 먼저 검사)
+  const EXPENSE_CATEGORIES = [
+    { name: 'OTT', icon: '📺', keywords: ['ott', '넷플릭스', 'netflix', '티빙', 'tving', '쿠팡플레이', '디즈니', 'disney', '웨이브', 'wavve', '왓챠', 'watcha', '유튜브', 'youtube', '애플tv', 'apple tv', '라프텔', 'laftel', '스포티비', 'spotv'] },
+    { name: '식비', icon: '🍚', keywords: ['식비', '식당', '밥', '점심', '저녁', '아침', '김밥', '국밥', '맥도날드', '버거', '롯데리아', '맘스터치', '서브웨이', '분식', '고기', '치킨', '피자', '한식', '중식', '일식', '양식'] },
+    { name: '카페·디저트', icon: '☕', keywords: ['카페', '커피', '스타벅스', 'starbucks', '투썸', '메가커피', '메가mgc', '컴포즈', '빽다방', '이디야', '할리스', '폴바셋', '블루보틀', '디저트', '베이커리', '파리바게뜨', '뚜레쥬르', '케이크', '빵'] },
+    { name: '배달', icon: '🛵', keywords: ['배달', '배민', '배달의민족', '쿠팡이츠', '요기요', '땡겨요'] },
+    { name: '편의점·마트', icon: '🏪', keywords: ['편의점', 'gs25', 'cu ', '세븐일레븐', '이마트24', '이마트', '홈플러스', '롯데마트', '트레이더스', '코스트코', '마트', '컬리', '장보기', '노브랜드'] },
+    { name: '술·유흥', icon: '🍺', keywords: ['술', '맥주', '소주', '호프', '포차', '이자카야', '와인', '바 ', '노래방', '회식'] },
+    { name: '교통', icon: '🚇', keywords: ['교통', '지하철', '버스', '티머니', '택시', '카카오t', '타다', '주유', '기름', '주차', 'ktx', 'srt', '코레일', '기차', '고속버스', '따릉이', '킥보드', '톨게이트', '하이패스'] },
+    { name: '쇼핑', icon: '🛍️', keywords: ['쇼핑', '쿠팡', '무신사', '29cm', '에이블리', '지그재그', 'w컨셉', '11번가', 'g마켓', '지마켓', '옥션', '네이버쇼핑', '스마트스토어', '다이소', '알리', '테무', '옷', '신발', '의류'] },
+    { name: '뷰티·미용', icon: '💄', keywords: ['뷰티', '미용', '올리브영', '화장품', '미용실', '헤어', '네일', '왁싱', '피부과', '시코르'] },
+    { name: '디지털 구독', icon: '🎧', keywords: ['구독', '멜론', '지니뮤직', '스포티파이', 'spotify', '바이브', '플로', 'flo', 'chatgpt', '챗gpt', 'openai', 'claude', '네이버플러스', '와우멤버십', '쿠팡와우', '아이클라우드', 'icloud', '구글원', 'google one', '밀리의서재', '리디'] },
+    { name: '주거·공과금', icon: '🏠', keywords: ['주거', '월세', '관리비', '전기', '가스', '수도', '공과금', '전세', '대출이자'] },
+    { name: '통신', icon: '📱', keywords: ['통신', 'skt', 'sk텔레콤', 'kt ', 'lg u+', 'lgu+', '유플러스', '알뜰폰', '휴대폰', '핸드폰', '인터넷요금'] },
+    { name: '문화·여가', icon: '🎬', keywords: ['문화', '여가', '영화', 'cgv', '메가박스', '롯데시네마', '공연', '전시', '콘서트', '뮤지컬', '티켓', '인터파크', '예스24', '교보문고', '책', '게임', '스팀', '닌텐도', '플스', '팝업'] },
+    { name: '여행·숙박', icon: '✈️', keywords: ['여행', '숙박', '항공', '대한항공', '아시아나', '제주항공', '진에어', '티웨이', '호텔', '에어비앤비', 'airbnb', '야놀자', '여기어때', '아고다', '트립닷컴', '펜션', '캠핑'] },
+    { name: '운동·건강', icon: '💪', keywords: ['운동', '헬스', '필라테스', 'pt', '요가', '클라이밍', '수영', '테니스', '골프', '러닝', '영양제'] },
+    { name: '의료', icon: '🏥', keywords: ['의료', '병원', '약국', '의원', '치과', '한의원', '안과', '정형외과', '내과'] },
+    { name: '교육·자기계발', icon: '📚', keywords: ['교육', '자기계발', '학원', '인강', '강의', '클래스101', '토익', '오픽', '자격증', '시험', '스터디', '과외'] },
+    { name: '경조사·선물', icon: '🎁', keywords: ['경조사', '선물', '축의금', '조의금', '부조', '선물하기', '꽃', '생일'] },
+    { name: '반려동물', icon: '🐶', keywords: ['반려', '동물병원', '사료', '간식(펫)', '펫', '애견', '고양이', '강아지'] },
+    { name: '보험·금융', icon: '🛡️', keywords: ['보험', '수수료', '연회비', '이자'] },
+    { name: '저축·투자', icon: '🐷', keywords: ['저축', '적금', '투자', '주식', '코인', '청약', 'etf', 'isa', '연금'] },
+    { name: '기타', icon: '🧾', keywords: ['기타'] }
+  ];
+  const INCOME_CATEGORIES = [
+    { name: '월급', icon: '💰', keywords: ['월급', '급여', '급여이체', '상여', '보너스', '성과급'] },
+    { name: '부수입', icon: '💼', keywords: ['부수입', '알바', '아르바이트', '프리랜서', '외주', '중고거래', '당근', '번개장터', '리워드', '앱테크'] },
+    { name: '용돈', icon: '🧧', keywords: ['용돈'] },
+    { name: '금융수입', icon: '📈', keywords: ['이자수입', '배당', '수익', '만기'] },
+    { name: '환급·캐시백', icon: '↩️', keywords: ['환급', '환불', '캐시백', '취소', '정산'] }
+  ];
+  const ALL_CATEGORIES = [...EXPENSE_CATEGORIES, ...INCOME_CATEGORIES];
+  const CARD_PAYMENT_RE = /카드대금|카드값|카드결제|카드 대금/;
+
+  function stripInstallment(tag) { return String(tag || '').replace(/\s*\(할부 \d+\/\d+\)\s*$/, '').trim(); }
+  // 태그(또는 문자 내용) → 카테고리 이름. 매칭 실패 시 null
+  function guessCategory(text, list) {
+    const t = ' ' + String(text || '').toLowerCase() + ' ';
+    if (!t.trim()) return null;
+    const cats = list || ALL_CATEGORIES;
+    const exact = cats.find(c => c.name === String(text).trim());
+    if (exact) return exact.name;
+    for (const c of cats) {
+      if (c.keywords.some(k => t.includes(k.toLowerCase()))) return c.name;
+    }
+    return null;
+  }
+  function categoryOf(tag) {
+    const base = stripInstallment(tag);
+    if (!base || /^할부 \d+\/\d+$/.test(String(tag || ''))) return '미분류';
+    return guessCategory(base) || base; // 직접 만든 태그는 그 이름 그대로 분류
+  }
+  function categoryIcon(name) {
+    const c = ALL_CATEGORIES.find(c => c.name === name);
+    return c ? c.icon : (name === '미분류' ? '❔' : '🏷️');
+  }
+
   function renderTagDatalist() {
     const dl = document.getElementById('tagDatalist');
     if (!dl) return;
-    dl.innerHTML = tags.map(t => `<option value="${escapeHtml(t)}"></option>`).join('');
+    const builtIn = ALL_CATEGORIES.map(c => c.name);
+    const custom = tags.filter(t => !builtIn.includes(t));
+    dl.innerHTML = [
+      ...ALL_CATEGORIES.map(c => `<option value="${escapeHtml(c.name)}">${c.icon} ${escapeHtml(c.name)}</option>`),
+      ...custom.map(t => `<option value="${escapeHtml(t)}"></option>`)
+    ].join('');
   }
 
   function depositTotal(acc) { return sum(acc.deposits, 'amount'); }
@@ -1162,7 +1288,7 @@
                 <option value="out">출금</option>
               </select>
               <input type="number" id="qa-amount-bank-${acc.id}" placeholder="금액">
-              <input type="text" id="qa-tag-bank-${acc.id}" list="tagDatalist" placeholder="태그 (선택)">
+              <input type="text" id="qa-tag-bank-${acc.id}" list="tagDatalist" placeholder="카테고리 (선택)">
               <button onclick="quickAdd('bank','${acc.id}')">저장</button>
             </div>
           </div>
@@ -1450,6 +1576,12 @@
       if (guess) typeSel.value = guess;
     }
 
+    const tagEl = document.getElementById('detailtx-tag');
+    if (tagEl && !tagEl.value.trim()) {
+      const cat = guessCategory(text);
+      if (cat) tagEl.value = cat;
+    }
+
     if (amount == null || isNaN(amount)) {
       alert('금액은 문자에서 자동으로 찾지 못했어요. 직접 확인해서 입력해주세요.');
     }
@@ -1523,7 +1655,7 @@
             <div class="mini-add-form" id="qa-form-savings-${acc.id}">
               <input type="date" id="qa-date-savings-${acc.id}" value="${todayStr()}">
               <input type="number" id="qa-amount-savings-${acc.id}" placeholder="금액">
-              <input type="text" id="qa-tag-savings-${acc.id}" list="tagDatalist" placeholder="태그 (선택)">
+              <input type="text" id="qa-tag-savings-${acc.id}" list="tagDatalist" placeholder="카테고리 (선택)">
               <button onclick="quickAdd('savings','${acc.id}')">저장</button>
             </div>
             <button class="mini-add-btn settle-btn" onclick="toggleSettleForm('${acc.id}')">해지</button>
@@ -1612,7 +1744,7 @@
                 <option value="10">10개월 할부</option>
                 <option value="12">12개월 할부</option>
               </select>
-              <input type="text" id="qa-tag-card-${acc.id}" list="tagDatalist" placeholder="태그 (선택)">
+              <input type="text" id="qa-tag-card-${acc.id}" list="tagDatalist" placeholder="카테고리 (선택)">
               <button onclick="quickAdd('card','${acc.id}')">저장</button>
             </div>
           </div>
@@ -1836,12 +1968,13 @@
     document.getElementById('resetConfirmWrap').style.display = 'none';
   }
   function resetAllData() {
-    ['nw_bank_accounts_v2', 'nw_savings_accounts', 'nw_cards', 'nw_bank_accounts', 'nw_liabilities'].forEach(k => {
+    ['nw_bank_accounts_v2', 'nw_savings_accounts', 'nw_cards', 'nw_bank_accounts', 'nw_liabilities', 'nw_ott_subs'].forEach(k => {
       try { localStorage.removeItem(k); } catch (e) {}
     });
     bankAccounts = [];
     savingsAccounts = [];
     cards = [];
+    ottSubs = [];
     cancelResetConfirm();
     renderAll();
   }
@@ -1938,6 +2071,7 @@
     netEl.textContent = (net < 0 ? '-' : '') + won(Math.abs(net));
     netEl.classList.toggle('negative', net < 0);
 
+    renderOtt();
     renderCalendar();
     renderCategoryTab();
     renderTagDatalist();
@@ -2018,10 +2152,12 @@
     const end = (endEl && endEl.value) || '9999-12-31';
 
     let all = collectAllTaggedTx().filter(t => t.date >= start && t.date <= end);
+    renderCatSummary(all);
     if (catSearchTerm) {
       const q = catSearchTerm.toLowerCase();
       all = all.filter(t =>
         (t.tag || '태그 없음').toLowerCase().includes(q) ||
+        categoryOf(t.tag).toLowerCase().includes(q) ||
         t.accountName.toLowerCase().includes(q)
       );
     }
@@ -2034,7 +2170,7 @@
       <div class="tag-tx-card">
         <div class="tx-row1">
           <span class="tx-type">${txLabel(t.kind, t.type)}</span>
-          <span class="tx-tag">${t.tag ? '#' + escapeHtml(t.tag) : ''}</span>
+          <span class="tx-tag">${t.tag ? categoryIcon(categoryOf(t.tag)) + ' #' + escapeHtml(t.tag) : ''}</span>
         </div>
         <div class="tx-row2">
           <span class="tx-acc">${escapeHtml(t.accountName)} · ${escapeHtml(t.date)}</span>
@@ -2042,6 +2178,248 @@
         </div>
       </div>
     `).join('');
+  }
+
+  /* ---------- 카테고리별 지출 요약 ---------- */
+  // 지출 = 통장 출금 + 카드 사용 (카드대금 납부 출금은 중복이라 제외), 수입 = 통장 입금
+  function isSpending(t) {
+    if (t.kind === 'card') return t.type === 'in';
+    if (t.kind === 'bank') return t.type === 'out' && !CARD_PAYMENT_RE.test(t.tag || '');
+    return false;
+  }
+  function isIncome(t) { return t.kind === 'bank' && t.type === 'in'; }
+  function filterByCategory(name) {
+    const input = document.getElementById('catSearchInput');
+    if (input) input.value = name;
+    applyCatSearch();
+  }
+  function renderCatSummary(list) {
+    const el = document.getElementById('catSummary');
+    if (!el) return;
+    const spend = list.filter(isSpending);
+    const income = list.filter(isIncome);
+    const spendTotal = sum(spend, 'amount');
+    const incomeTotal = sum(income, 'amount');
+    const groups = {};
+    spend.forEach(t => { const c = categoryOf(t.tag); groups[c] = (groups[c] || 0) + Number(t.amount || 0); });
+    const rows = Object.entries(groups).sort((a, b) => b[1] - a[1]);
+    const max = rows.length ? rows[0][1] : 0;
+    const chips = EXPENSE_CATEGORIES.map(c =>
+      `<button class="cat-chip" onclick="filterByCategory('${escapeHtml(c.name)}')">${c.icon} ${escapeHtml(c.name)}</button>`
+    ).join('');
+    el.innerHTML = `
+      <div class="cat-summary">
+        <div class="sum-head">
+          <div><div class="k">수입</div><div class="v in">${won(incomeTotal)}</div></div>
+          <div><div class="k">지출</div><div class="v out">${won(spendTotal)}</div></div>
+          <div><div class="k">남은 돈</div><div class="v">${incomeTotal - spendTotal < 0 ? '-' : ''}${won(Math.abs(incomeTotal - spendTotal))}</div></div>
+        </div>
+        <div class="sum-title">카테고리별 지출</div>
+        ${rows.length ? rows.map(([name, amt]) => `
+          <div class="cat-bar-row ${name === 'OTT' ? 'ott' : ''}" onclick="filterByCategory('${escapeHtml(name).replace(/'/g, "\\'")}')">
+            <div class="cat-bar-top">
+              <span><span class="cat-name">${categoryIcon(name)} ${escapeHtml(name)}</span><span class="cat-pct">${spendTotal ? Math.round(amt / spendTotal * 100) : 0}%</span></span>
+              <span class="cat-amt">${won(amt)}</span>
+            </div>
+            <div class="cat-bar"><span style="width:${max ? Math.max(2, amt / max * 100) : 0}%"></span></div>
+          </div>
+        `).join('') : '<div class="empty-note">이 기간에 지출 내역이 없어요.</div>'}
+        <div class="sum-title" style="margin-top:12px;">카테고리로 찾기</div>
+        <div class="cat-chips">${chips}</div>
+      </div>`;
+  }
+
+  /* ---------- OTT 구독 관리 (결제일마다 연결된 카드/통장에 자동 기록) ---------- */
+  // 요금은 각 서비스 공식 요금제 기준 기본값 — 사용자가 수정 가능
+  const OTT_SERVICES = [
+    { name: '넷플릭스', color: '#E50914', short: 'N', plans: [['광고형 스탠다드', 5500], ['스탠다드', 13500], ['프리미엄', 17000]] },
+    { name: '티빙', color: '#FF153C', short: 'T', plans: [['광고형 스탠다드', 5500], ['베이직', 9500], ['스탠다드', 13500], ['프리미엄', 17000]] },
+    { name: '쿠팡플레이', color: '#0074E9', short: 'C', plans: [['와우 멤버십', 7890]] },
+    { name: '디즈니+', color: '#113CCF', short: 'D+', plans: [['스탠다드', 9900], ['프리미엄', 13900]] },
+    { name: '웨이브', color: '#1A4BFF', short: 'W', plans: [['베이직', 7900], ['스탠다드', 10900], ['프리미엄', 13900]] },
+    { name: '유튜브 프리미엄', color: '#FF0000', short: '▶', plans: [['개인', 14900]] },
+    { name: '왓챠', color: '#FF0558', short: 'W', plans: [['베이직', 7900], ['프리미엄', 12900]] },
+    { name: '애플TV+', color: '#111111', short: 'tv', plans: [['개인', 6500]] },
+    { name: '라프텔', color: '#816BFF', short: 'L', plans: [['베이직', 9900], ['프리미엄', 14900]] },
+    { name: '스포티비 나우', color: '#00B050', short: 'S', plans: [['월 이용권', 10900]] },
+    { name: '직접 입력', color: '#6B6C6E', short: '+', plans: [['직접 입력', 0]] }
+  ];
+  // ottSubs: [{id, service, plan, price, billingDay, startDate, account:'card:ID'|'bank:ID'|'', lastBilled, active}]
+  let ottSubs = load('nw_ott_subs', []);
+  function saveOtt() { save('nw_ott_subs', ottSubs); }
+  function ottService(name) { return OTT_SERVICES.find(s => s.name === name) || OTT_SERVICES[OTT_SERVICES.length - 1]; }
+
+  function ottBillingDate(y, m, day) {
+    const dim = new Date(y, m + 1, 0).getDate();
+    return `${y}-${pad2(m + 1)}-${pad2(Math.min(day, dim))}`;
+  }
+  function ottNextBilling(sub) {
+    const t = todayStr();
+    if (sub.startDate > t) return sub.startDate;
+    const now = new Date();
+    let y = now.getFullYear(), m = now.getMonth();
+    let d = ottBillingDate(y, m, sub.billingDay);
+    if (d < t) { m++; if (m > 11) { m = 0; y++; } d = ottBillingDate(y, m, sub.billingDay); }
+    return d;
+  }
+  function ottLastBillingBefore(sub, dateStr) {
+    const d = new Date(dateStr + 'T00:00:00');
+    let y = d.getFullYear(), m = d.getMonth();
+    let bd = ottBillingDate(y, m, sub.billingDay);
+    if (bd >= dateStr) { m--; if (m < 0) { m = 11; y--; } bd = ottBillingDate(y, m, sub.billingDay); }
+    return bd > (sub.lastBilled || '') ? bd : sub.lastBilled;
+  }
+  function ottAccount(ref) {
+    if (!ref) return null;
+    const [kind, id] = ref.split(':');
+    const acc = (kind === 'card' ? cards : bankAccounts).find(a => a.id === id);
+    return acc ? { kind, acc } : null;
+  }
+  // 앱을 열 때마다 지난 결제일 중 아직 기록 안 된 결제를 자동으로 내역에 추가
+  function runOttAutoBilling() {
+    const t = todayStr();
+    let changedCards = false, changedBanks = false, changedSubs = false;
+    ottSubs.forEach(sub => {
+      if (!sub.active || !sub.account) return;
+      const link = ottAccount(sub.account);
+      if (!link) return;
+      const sd = new Date(sub.startDate + 'T00:00:00');
+      let y = sd.getFullYear(), m = sd.getMonth();
+      for (let guard = 0; guard < 600; guard++) {
+        const bd = ottBillingDate(y, m, sub.billingDay);
+        if (bd > t) break;
+        if (bd >= sub.startDate && (!sub.lastBilled || bd > sub.lastBilled)) {
+          const tag = `${sub.service} (OTT)`;
+          if (link.kind === 'card') {
+            link.acc.transactions.push({ id: uid(), date: bd, type: 'in', amount: sub.price, tag, ottId: sub.id });
+            changedCards = true;
+          } else {
+            link.acc.transactions.push({ id: uid(), date: bd, type: 'out', amount: sub.price, tag, ottId: sub.id });
+            changedBanks = true;
+          }
+          sub.lastBilled = bd;
+          changedSubs = true;
+        }
+        m++; if (m > 11) { m = 0; y++; }
+      }
+    });
+    if (changedCards) save('nw_cards', cards);
+    if (changedBanks) save('nw_bank_accounts_v2', bankAccounts);
+    if (changedSubs) saveOtt();
+  }
+
+  function onOttServiceChange() {
+    const svc = ottService(document.getElementById('ott-service').value);
+    document.getElementById('ott-custom-name').style.display = svc.name === '직접 입력' ? '' : 'none';
+    const planSel = document.getElementById('ott-plan');
+    planSel.style.display = svc.name === '직접 입력' ? 'none' : '';
+    planSel.innerHTML = svc.plans.map(([p, price], i) => `<option value="${i}">${escapeHtml(p)} · ${won(price)}</option>`).join('');
+    onOttPlanChange();
+  }
+  function onOttPlanChange() {
+    const svc = ottService(document.getElementById('ott-service').value);
+    const plan = svc.plans[parseInt(document.getElementById('ott-plan').value, 10) || 0];
+    document.getElementById('ott-price').value = plan && plan[1] ? plan[1] : '';
+  }
+  function renderOttForm() {
+    const svcSel = document.getElementById('ott-service');
+    if (!svcSel) return;
+    if (!svcSel.options.length) {
+      svcSel.innerHTML = OTT_SERVICES.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)}</option>`).join('');
+      onOttServiceChange();
+    }
+    const startEl = document.getElementById('ott-start');
+    if (!startEl.value) startEl.value = todayStr();
+    const accSel = document.getElementById('ott-account');
+    const prev = accSel.value;
+    accSel.innerHTML = `<option value="">결제 수단 연결 안 함 (금액만 관리)</option>` +
+      cards.map(c => `<option value="card:${c.id}">💳 ${escapeHtml(c.name)}</option>`).join('') +
+      bankAccounts.map(b => `<option value="bank:${b.id}">🏦 ${escapeHtml(b.name)}</option>`).join('');
+    if (accSel.dataset.touched && [...accSel.options].some(o => o.value === prev)) accSel.value = prev;
+    else if (cards.length) accSel.value = `card:${cards[0].id}`;
+    else if (bankAccounts.length) accSel.value = `bank:${bankAccounts[0].id}`;
+  }
+  function addOttSub() {
+    const svc = ottService(document.getElementById('ott-service').value);
+    let name = svc.name;
+    let plan = '';
+    if (svc.name === '직접 입력') {
+      name = document.getElementById('ott-custom-name').value.trim();
+      if (!name) { alert('서비스 이름을 입력해주세요.'); return; }
+    } else {
+      const p = svc.plans[parseInt(document.getElementById('ott-plan').value, 10) || 0];
+      plan = p ? p[0] : '';
+    }
+    const price = parseFloat(document.getElementById('ott-price').value);
+    if (isNaN(price) || price <= 0) { alert('월 요금을 올바르게 입력해주세요.'); return; }
+    const startDate = document.getElementById('ott-start').value || todayStr();
+    const billingDay = parseInt(startDate.slice(8, 10), 10);
+    const account = document.getElementById('ott-account').value;
+    ottSubs.push({ id: uid(), service: name, plan, price, billingDay, startDate, account, lastBilled: null, active: true });
+    saveOtt();
+    document.getElementById('ott-custom-name').value = '';
+    document.getElementById('form-ott').classList.remove('open');
+    delete document.getElementById('ott-account').dataset.touched;
+    runOttAutoBilling();
+    renderAll();
+  }
+  function toggleOttActive(id) {
+    const sub = ottSubs.find(s => s.id === id);
+    if (!sub) return;
+    sub.active = !sub.active;
+    // 재개 시 쉬는 동안의 결제는 소급 기록하지 않음
+    if (sub.active) sub.lastBilled = ottLastBillingBefore(sub, todayStr());
+    saveOtt();
+    runOttAutoBilling();
+    renderAll();
+  }
+  function deleteOttSub(id) {
+    const sub = ottSubs.find(s => s.id === id);
+    if (!sub) return;
+    if (!confirm(`${sub.service} 구독을 삭제할까요? (이미 기록된 결제 내역은 남아요)`)) return;
+    ottSubs = ottSubs.filter(s => s.id !== id);
+    saveOtt();
+    renderAll();
+  }
+  function renderOtt() {
+    const el = document.getElementById('ottList');
+    if (!el) return;
+    renderOttForm();
+    const active = ottSubs.filter(s => s.active);
+    const monthly = sum(active, 'price');
+    document.getElementById('ottColTotal').textContent = `${won(monthly)}/월`;
+    document.getElementById('ottYearly').textContent = active.length
+      ? `구독 ${active.length}개 · 1년이면 ${won(monthly * 12)}`
+      : '';
+    if (!ottSubs.length) {
+      el.innerHTML = `<div class="empty-note">구독 중인 OTT를 추가해보세요. 넷플릭스·티빙·쿠팡플레이·디즈니+ 등 결제일마다 자동으로 기록돼요.</div>`;
+      return;
+    }
+    const sorted = [...ottSubs].sort((a, b) => (b.active - a.active) || ottNextBilling(a).localeCompare(ottNextBilling(b)));
+    el.innerHTML = sorted.map(sub => {
+      const svc = ottService(sub.service);
+      const link = ottAccount(sub.account);
+      const next = ottNextBilling(sub);
+      const dday = Math.round((new Date(next + 'T00:00:00') - new Date(todayStr() + 'T00:00:00')) / 86400000);
+      const meta = [
+        sub.plan,
+        `매달 ${sub.billingDay}일`,
+        sub.active ? (dday === 0 ? '오늘 결제' : `다음 결제 ${next.slice(5).replace('-', '/')} (D-${dday})`) : '일시정지',
+        link ? link.acc.name : '결제수단 미연결'
+      ].filter(Boolean).join(' · ');
+      return `
+        <div class="ott-row ${sub.active ? '' : 'paused'}">
+          <span class="ott-left">
+            <span class="ott-logo" style="background:${svc.color}">${escapeHtml(svc.short)}</span>
+            <span class="name-wrap"><span class="name">${escapeHtml(sub.service)}</span><span class="sub-cat">${escapeHtml(meta)}</span></span>
+          </span>
+          <span class="right">
+            <span class="amt">${won(sub.price)}</span>
+            <button class="ott-btn" onclick="toggleOttActive('${sub.id}')">${sub.active ? '정지' : '재개'}</button>
+            <button class="del-acct" title="구독 삭제" onclick="deleteOttSub('${sub.id}')">×</button>
+          </span>
+        </div>`;
+    }).join('');
   }
 
   /* ---------- Calendar (이번 달 통장/적금/카드 내역) ---------- */
@@ -2118,6 +2496,7 @@
     }
   }
 
+  runOttAutoBilling();
   renderAll();
   renderTodos();
   checkTodoNotifications();
