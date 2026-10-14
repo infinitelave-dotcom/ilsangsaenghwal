@@ -115,17 +115,28 @@
     --accent: #F07AA6; --accent-bg: rgba(240,122,166,0.15); --income: #4FBF9F;
     --expense: #F07A72; --expense-bg: rgba(240,122,114,0.13); --warn: #F2B544; --shadow: none;
   }
-  .theme-row { padding: 13px 0 14px; border-bottom: 1px solid var(--line); }
+  .theme-row { display: flex; justify-content: space-between; align-items: center; gap: 10px; padding: 13px 0; border-bottom: 1px solid var(--line); }
   .theme-row:last-child { border-bottom: none; }
-  .theme-row .head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 10px; }
-  .theme-row .head .d { font-size: 12.5px; color: var(--ink-soft); }
-  .theme-dots { display: grid; grid-template-columns: repeat(7, 24px); justify-content: space-between; row-gap: 10px; }
-  .theme-dot {
-    width: 24px; height: 24px; border-radius: 50%; padding: 0; cursor: pointer; position: relative;
-    border: 1px solid var(--line-strong); background: var(--sw-bg);
+  .theme-select { position: relative; width: 170px; }
+  .theme-bar {
+    width: 100%; display: flex; align-items: center; gap: 8px; padding: 7px 10px; cursor: pointer;
+    border: 1px solid var(--line-strong); background: var(--bg); border-radius: 9px; text-align: left;
   }
-  .theme-dot::after { content: ''; position: absolute; inset: 7px; border-radius: 50%; background: var(--sw-acc); }
-  .theme-dot.on { box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--ink); }
+  .theme-bar .t-name { flex: 1; }
+  .theme-bar .chev { color: var(--ink-soft); flex-shrink: 0; transition: transform .15s; }
+  .theme-select.open .theme-bar .chev { transform: rotate(180deg); }
+  .theme-menu {
+    display: none; position: absolute; right: 0; top: calc(100% + 4px); width: 100%; z-index: 15;
+    background: var(--card); border: 1px solid var(--line-strong); border-radius: 10px; padding: 4px;
+    max-height: 300px; overflow-y: auto; box-shadow: 0 8px 24px rgba(0,0,0,0.14);
+  }
+  .theme-select.open .theme-menu { display: block; }
+  .theme-opt { width: 100%; display: flex; align-items: center; gap: 8px; padding: 8px 8px; border: none; background: none; border-radius: 7px; cursor: pointer; text-align: left; }
+  .theme-opt:hover { background: var(--bg); }
+  .theme-opt .t-name { flex: 1; }
+  .theme-opt.on { font-weight: 700; background: var(--accent-bg); }
+  .theme-dot { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; position: relative; border: 1px solid var(--line-strong); background: var(--sw-bg); }
+  .theme-dot::after { content: ''; position: absolute; inset: 4px; border-radius: 50%; background: var(--sw-acc); }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; }
@@ -397,8 +408,11 @@
         <input type="number" inputmode="numeric" id="budgetInput" placeholder="0" onchange="saveBudgetInput()">
       </div>
       <div class="theme-row">
-        <div class="head"><span class="k">화면 테마</span><span class="d" id="themeName"></span></div>
-        <div class="theme-dots" id="themeGrid"></div>
+        <div class="k">화면 테마</div>
+        <div class="theme-select" id="themeSelect">
+          <button class="theme-bar" id="themeBar" onclick="toggleThemeMenu(event)" aria-haspopup="listbox"></button>
+          <div class="theme-menu" id="themeGrid" role="listbox"></div>
+        </div>
       </div>
     </div>
     <div class="card">
@@ -1082,13 +1096,17 @@ function applyTheme(v) {
   const meta = document.querySelector('meta[name="theme-color"]');
   if (meta) meta.setAttribute('content', t.meta);
 }
-function setTheme(v) { store(KEY.theme, v); applyTheme(v); renderThemeGrid(); }
+function setTheme(v) { store(KEY.theme, v); applyTheme(v); closeThemeMenu(); renderThemeGrid(); }
+function toggleThemeMenu(e) { e.stopPropagation(); document.getElementById('themeSelect').classList.toggle('open'); }
+function closeThemeMenu() { const el = document.getElementById('themeSelect'); if (el) el.classList.remove('open'); }
+document.addEventListener('click', e => { if (!e.target.closest('#themeSelect')) closeThemeMenu(); });
+const themeDot = x => `<span class="theme-dot" style="--sw-bg:${x.bg};--sw-acc:${x.acc}"></span>`;
 function renderThemeGrid() {
   const cur = load(KEY.theme, 'auto');
   const t = THEMES.find(x => x.id === cur) || THEMES[0];
-  document.getElementById('themeName').textContent = t.name;
+  document.getElementById('themeBar').innerHTML = `<span class="t-name">${t.name}</span>${themeDot(t)}<svg class="chev" width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 4.5l3 3 3-3"/></svg>`;
   document.getElementById('themeGrid').innerHTML = THEMES.map(x =>
-    `<button class="theme-dot ${x.id === t.id ? 'on' : ''}" style="--sw-bg:${x.bg};--sw-acc:${x.acc}" onclick="setTheme('${x.id}')" title="${x.name}" aria-label="${x.name} 테마"></button>`
+    `<button class="theme-opt ${x.id === t.id ? 'on' : ''}" role="option" aria-selected="${x.id === t.id}" onclick="setTheme('${x.id}')"><span class="t-name">${x.name}</span>${themeDot(x)}</button>`
   ).join('');
 }
 function exportData() {
@@ -1123,7 +1141,7 @@ function resetAll() {
   toast('초기화했어요'); render();
 }
 
-document.addEventListener('keydown', e => { if (e.key === 'Escape') closeSheets(); });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeSheets(); closeThemeMenu(); } });
 
 /* ================= 시작 ================= */
 applyTheme(load(KEY.theme, 'auto'));
