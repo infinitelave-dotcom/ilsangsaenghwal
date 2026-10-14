@@ -29,7 +29,7 @@
     --shadow: 0 1px 2px rgba(0,0,0,0.04), 0 4px 14px rgba(0,0,0,0.04);
   }
   @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
+    :root:not([data-theme]) {
       --bg: #121413;
       --card: #1C1F1E;
       --ink: #ECEDEC;
@@ -60,6 +60,67 @@
     --warn: #F2B544;
     --shadow: none;
   }
+
+  /* 색상 테마 */
+  :root[data-theme="pink"] {
+    --bg: #FBEAF1; --card: #FFFFFF; --ink: #3A2530; --ink-soft: #8A6676;
+    --line: rgba(58,37,48,0.10); --line-strong: rgba(58,37,48,0.20);
+    --accent: #C2457A; --accent-bg: rgba(194,69,122,0.12); --income: #1F6F5C;
+  }
+  :root[data-theme="peach"] {
+    --bg: #FDEFE6; --card: #FFFFFF; --ink: #3A2A22; --ink-soft: #8C6E60;
+    --line: rgba(58,42,34,0.10); --line-strong: rgba(58,42,34,0.20);
+    --accent: #D0663A; --accent-bg: rgba(208,102,58,0.12); --income: #1F6F5C;
+  }
+  :root[data-theme="yellow"] {
+    --bg: #FBF5DC; --card: #FFFFFF; --ink: #35301E; --ink-soft: #80775A;
+    --line: rgba(53,48,30,0.10); --line-strong: rgba(53,48,30,0.20);
+    --accent: #9A7200; --accent-bg: rgba(154,114,0,0.12); --income: #1F6F5C;
+  }
+  :root[data-theme="green"] {
+    --bg: #EEF6E2; --card: #FFFFFF; --ink: #26321C; --ink-soft: #6D7D5E;
+    --line: rgba(38,50,28,0.10); --line-strong: rgba(38,50,28,0.20);
+    --accent: #4F8A1F; --accent-bg: rgba(79,138,31,0.12); --income: #1F6F5C;
+  }
+  :root[data-theme="mint"] {
+    --bg: #E3F6F1; --card: #FFFFFF; --ink: #1C332E; --ink-soft: #5F7E77;
+    --line: rgba(28,51,46,0.10); --line-strong: rgba(28,51,46,0.20);
+    --accent: #13897A; --accent-bg: rgba(19,137,122,0.12); --income: #1F6F5C;
+  }
+  :root[data-theme="sky"] {
+    --bg: #E6F2FB; --card: #FFFFFF; --ink: #1D2B38; --ink-soft: #62778A;
+    --line: rgba(29,43,56,0.10); --line-strong: rgba(29,43,56,0.20);
+    --accent: #2F7BC4; --accent-bg: rgba(47,123,196,0.12); --income: #1F6F5C;
+  }
+  :root[data-theme="purple"] {
+    --bg: #F0EAFB; --card: #FFFFFF; --ink: #2B2338; --ink-soft: #75698A;
+    --line: rgba(43,35,56,0.10); --line-strong: rgba(43,35,56,0.20);
+    --accent: #7B4FC9; --accent-bg: rgba(123,79,201,0.12); --income: #1F6F5C;
+  }
+  :root[data-theme="navy"] {
+    --bg: #0F1626; --card: #18213A; --ink: #E6EAF3; --ink-soft: #98A3BC;
+    --line: rgba(230,234,243,0.10); --line-strong: rgba(230,234,243,0.22);
+    --accent: #6EA8FF; --accent-bg: rgba(110,168,255,0.15); --income: #4FBF9F;
+    --expense: #F07A72; --expense-bg: rgba(240,122,114,0.13); --warn: #F2B544; --shadow: none;
+  }
+  :root[data-theme="black"] {
+    --bg: #000000; --card: #111111; --ink: #EDEDED; --ink-soft: #9A9A9A;
+    --line: rgba(237,237,237,0.10); --line-strong: rgba(237,237,237,0.22);
+    --accent: #4FBF9F; --accent-bg: rgba(79,191,159,0.15); --income: #4FBF9F;
+    --expense: #F07A72; --expense-bg: rgba(240,122,114,0.13); --warn: #F2B544; --shadow: none;
+  }
+  :root[data-theme="wine"] {
+    --bg: #1C1016; --card: #2A1820; --ink: #F2E6EB; --ink-soft: #B597A4;
+    --line: rgba(242,230,235,0.10); --line-strong: rgba(242,230,235,0.22);
+    --accent: #F07AA6; --accent-bg: rgba(240,122,166,0.15); --income: #4FBF9F;
+    --expense: #F07A72; --expense-bg: rgba(240,122,114,0.13); --warn: #F2B544; --shadow: none;
+  }
+  .theme-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; padding: 4px 0 6px; }
+  .theme-opt { background: none; border: none; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 11.5px; color: var(--ink-soft); padding: 0; }
+  .theme-sw { width: 46px; height: 46px; border-radius: 50%; border: 2px solid var(--line-strong); position: relative; overflow: hidden; }
+  .theme-sw::after { content: ''; position: absolute; right: 0; bottom: 0; width: 50%; height: 50%; background: var(--sw-acc); }
+  .theme-opt.on { color: var(--ink); font-weight: 700; }
+  .theme-opt.on .theme-sw { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
 
   * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
   html, body { margin: 0; padding: 0; }
@@ -330,14 +391,10 @@
         <div><div class="k">한 달 예산</div><div class="d">0이면 예산을 쓰지 않아요</div></div>
         <input type="number" inputmode="numeric" id="budgetInput" placeholder="0" onchange="saveBudgetInput()">
       </div>
-      <div class="set-row">
-        <div class="k">화면 테마</div>
-        <select id="themeSelect" onchange="setTheme(this.value)">
-          <option value="auto">시스템 설정</option>
-          <option value="light">밝게</option>
-          <option value="dark">어둡게</option>
-        </select>
-      </div>
+    </div>
+    <div class="card">
+      <h2>화면 테마 <span class="side" id="themeName"></span></h2>
+      <div class="theme-grid" id="themeGrid"></div>
     </div>
     <div class="card">
       <div class="set-row">
@@ -824,7 +881,7 @@ function renderOtt() {
 
 function renderSettings() {
   document.getElementById('budgetInput').value = budget || '';
-  document.getElementById('themeSelect').value = load(KEY.theme, 'auto');
+  renderThemeGrid();
 }
 
 /* ================= 내역 시트 ================= */
@@ -998,11 +1055,38 @@ function saveBudgetInput() {
   store(KEY.budget, budget);
   toast(budget ? `한 달 예산 ${won(budget)}` : '예산을 껐어요');
 }
+const THEMES = [
+  { id: 'auto',   name: '시스템',   bg: 'linear-gradient(135deg,#F4F5F4 50%,#121413 50%)', acc: '#1F6F5C', meta: '#1F6F5C' },
+  { id: 'light',  name: '밝게',     bg: '#F4F5F4', acc: '#1F6F5C', meta: '#F4F5F4' },
+  { id: 'dark',   name: '어둡게',   bg: '#121413', acc: '#4FBF9F', meta: '#121413' },
+  { id: 'pink', name: '분홍', bg: '#FBEAF1', acc: '#C2457A', meta: '#FBEAF1' },
+  { id: 'peach', name: '살구', bg: '#FDEFE6', acc: '#D0663A', meta: '#FDEFE6' },
+  { id: 'yellow', name: '연노랑', bg: '#FBF5DC', acc: '#9A7200', meta: '#FBF5DC' },
+  { id: 'green', name: '연두', bg: '#EEF6E2', acc: '#4F8A1F', meta: '#EEF6E2' },
+  { id: 'mint', name: '민트', bg: '#E3F6F1', acc: '#13897A', meta: '#E3F6F1' },
+  { id: 'sky', name: '하늘', bg: '#E6F2FB', acc: '#2F7BC4', meta: '#E6F2FB' },
+  { id: 'purple', name: '연보라', bg: '#F0EAFB', acc: '#7B4FC9', meta: '#F0EAFB' },
+  { id: 'navy', name: '네이비', bg: '#0F1626', acc: '#6EA8FF', meta: '#0F1626' },
+  { id: 'black', name: '블랙', bg: '#000000', acc: '#4FBF9F', meta: '#000000' },
+  { id: 'wine', name: '와인', bg: '#1C1016', acc: '#F07AA6', meta: '#1C1016' },
+];
 function applyTheme(v) {
-  if (v === 'light' || v === 'dark') document.documentElement.setAttribute('data-theme', v);
-  else document.documentElement.removeAttribute('data-theme');
+  const t = THEMES.find(x => x.id === v) || THEMES[0];
+  if (t.id === 'auto') document.documentElement.removeAttribute('data-theme');
+  else document.documentElement.setAttribute('data-theme', t.id);
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.setAttribute('content', t.meta);
 }
-function setTheme(v) { store(KEY.theme, v); applyTheme(v); }
+function setTheme(v) { store(KEY.theme, v); applyTheme(v); renderThemeGrid(); }
+function renderThemeGrid() {
+  const cur = load(KEY.theme, 'auto');
+  const t = THEMES.find(x => x.id === cur) || THEMES[0];
+  document.getElementById('themeName').textContent = t.name;
+  document.getElementById('themeGrid').innerHTML = THEMES.map(x => `
+    <button class="theme-opt ${x.id === t.id ? 'on' : ''}" onclick="setTheme('${x.id}')" aria-label="${x.name} 테마">
+      <span class="theme-sw" style="background:${x.bg};--sw-acc:${x.acc}"></span>${x.name}
+    </button>`).join('');
+}
 function exportData() {
   const blob = new Blob([JSON.stringify({ app: 'ilsangsaenghwal-gagyebu', version: 1, txs, otts, budget }, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
