@@ -385,7 +385,7 @@
   <section id="view-ott" class="hidden">
     <div class="card">
       <div class="ott-total">
-        <div class="box"><div class="k">매달 나가는 돈</div><div class="v out num" id="ottMonthly">0원</div></div>
+        <div class="box"><div class="k">월 평균</div><div class="v out num" id="ottMonthly">0원</div></div>
         <div class="box"><div class="k">1년이면</div><div class="v num" id="ottYearly">0원</div></div>
       </div>
       <div class="muted" style="font-size:12.5px;margin-top:8px;" id="ottCountNote"></div>
@@ -493,16 +493,20 @@
   <h3 id="ottSheetTitle">OTT 구독 추가</h3>
   <div class="preset-grid" id="ottPresets"></div>
   <div class="field hidden" id="ottNameField"><label>서비스 이름</label><input id="ottName" type="text" placeholder="예: U+모바일tv"></div>
+  <div class="seg" id="ottCycleSeg">
+    <button class="on" data-cycle="month" onclick="setOttCycle('month')">매달 결제</button>
+    <button data-cycle="year" onclick="setOttCycle('year')">연간 결제</button>
+  </div>
   <div class="field" id="ottPlanField"><label>요금제</label><select id="ottPlan" onchange="onOttPlan()"></select></div>
   <div class="two">
-    <div class="field"><label>월 요금</label><input id="ottPrice" type="text" inputmode="numeric" oninput="formatAmountInput(this)"></div>
-    <div class="field"><label>결제일 (시작일)</label><input id="ottStart" type="date"></div>
+    <div class="field"><label id="ottPriceLabel">월 요금</label><input id="ottPrice" type="text" inputmode="numeric" oninput="formatAmountInput(this)"></div>
+    <div class="field"><label id="ottStartLabel">결제일 (시작일)</label><input id="ottStart" type="date"></div>
   </div>
   <div class="field"><label>결제 수단</label>
     <select id="ottMethod"><option>카드</option><option>체크카드</option><option>계좌이체</option><option>간편결제</option><option>통신사 결합</option></select>
   </div>
   <label class="check"><input type="checkbox" id="ottAuto" checked> 결제일마다 지출 내역에 자동 기록</label>
-  <div class="hint muted" style="font-size:11.5px;margin:-6px 0 12px;">요금은 기본값이에요. 실제 결제 금액과 다르면 수정해주세요.</div>
+  <div class="hint muted" style="font-size:11.5px;margin:-6px 0 12px;">요금은 기본값이에요. 연간 결제는 보통 할인되니 실제 결제 금액으로 수정해주세요.</div>
   <div class="btn-row">
     <button class="btn danger hidden" id="ottDelete" onclick="deleteOtt()">삭제</button>
     <button class="btn" onclick="closeSheets()">취소</button>
@@ -569,7 +573,7 @@ const OTT_SERVICES = [
   { name: '넷플릭스',      color: '#E50914', logo: 'N',  plans: [['광고형 스탠다드', 5500], ['스탠다드', 13500], ['프리미엄', 17000]] },
   { name: '티빙',          color: '#FF153C', logo: 'T',  plans: [['광고형 스탠다드', 5500], ['베이직', 9500], ['스탠다드', 13500], ['프리미엄', 17000]] },
   { name: '쿠팡플레이',    color: '#0074E9', logo: 'C',  plans: [['와우 멤버십', 7890]] },
-  { name: '디즈니+',       color: '#113CCF', logo: 'D+', plans: [['스탠다드', 9900], ['프리미엄', 13900]] },
+  { name: '디즈니+',       color: '#113CCF', logo: 'D+', plans: [['스탠다드', 9900, 99000], ['프리미엄', 13900, 139000]] },
   { name: '유튜브 프리미엄', color: '#FF0000', logo: '▶', plans: [['개인', 14900], ['가족', 23900]] },
   { name: '웨이브',        color: '#1A4BFF', logo: 'W',  plans: [['베이직', 7900], ['스탠다드', 10900], ['프리미엄', 13900]] },
   { name: '왓챠',          color: '#FF0558', logo: 'w',  plans: [['베이직', 7900], ['프리미엄', 12900]] },
@@ -579,6 +583,12 @@ const OTT_SERVICES = [
   { name: '치지직·SOOP',   color: '#00C73C', logo: '⚡', plans: [['구독', 4900]] },
   { name: '직접 입력',     color: '#6E7270', logo: '+',  plans: [] }
 ];
+const isYearly = o => o.cycle === 'year';
+const planPrice = (p, cycle) => cycle === 'year' ? (p[2] || p[1] * 12) : p[1];
+// 월 환산 금액 (연간 결제는 12로 나눔)
+const ottMonthlyEq = o => isYearly(o) ? o.price / 12 : o.price;
+const ottYearTotal = o => isYearly(o) ? o.price : o.price * 12;
+const cycleLabel = o => isYearly(o) ? `매년 ${Number(o.startDate.slice(5, 7))}월 ${o.day}일` : `매달 ${o.day}일`;
 const ottSvc = name => OTT_SERVICES.find(s => s.name === name) || { name, color: '#6E7270', logo: (name || '?').slice(0, 1), plans: [] };
 
 /* ================= 저장소 ================= */
@@ -635,37 +645,35 @@ function billDate(y, m, day) { // m: 0~11, 말일보다 큰 결제일은 말일�
   const dim = new Date(y, m + 1, 0).getDate();
   return `${y}-${pad2(m + 1)}-${pad2(Math.min(day, dim))}`;
 }
+// k번째 결제일 (매달: 시작월+k개월, 매년: 시작연도+k년)
+function nthBill(o, k) {
+  const y = Number(o.startDate.slice(0, 4)), m = Number(o.startDate.slice(5, 7)) - 1;
+  if (isYearly(o)) return billDate(y + k, m, o.day);
+  return billDate(y + Math.floor((m + k) / 12), (m + k) % 12, o.day);
+}
 function nextBill(o) {
   const t = today();
-  if (o.startDate > t) return o.startDate;
-  const n = new Date();
-  let d = billDate(n.getFullYear(), n.getMonth(), o.day);
-  if (d < t) d = billDate(n.getMonth() === 11 ? n.getFullYear() + 1 : n.getFullYear(), (n.getMonth() + 1) % 12, o.day);
-  return d;
+  for (let k = 0; k < 1200; k++) { const b = nthBill(o, k); if (b >= t) return b; }
+  return o.startDate;
 }
 function lastBillBefore(o, dateStr) {
-  const d = new Date(dateStr + 'T00:00:00');
-  let y = d.getFullYear(), m = d.getMonth();
-  let b = billDate(y, m, o.day);
-  if (b >= dateStr) { m--; if (m < 0) { m = 11; y--; } b = billDate(y, m, o.day); }
-  return b;
+  let last = null;
+  for (let k = 0; k < 1200; k++) { const b = nthBill(o, k); if (b >= dateStr) break; last = b; }
+  return last;
 }
 function runOttBilling() {
   const t = today();
   let added = 0;
   otts.forEach(o => {
     if (!o.active || !o.auto) return;
-    const s = new Date(o.startDate + 'T00:00:00');
-    let y = s.getFullYear(), m = s.getMonth();
-    for (let i = 0; i < 600; i++) {
-      const b = billDate(y, m, o.day);
+    for (let k = 0; k < 1200; k++) {
+      const b = nthBill(o, k);
       if (b > t) break;
       if (b >= o.startDate && (!o.lastBilled || b > o.lastBilled)) {
-        txs.push({ id: uid(), type: 'expense', amount: o.price, cat: 'ott', memo: `${o.service} 구독`, date: b, method: o.method, ottId: o.id });
+        txs.push({ id: uid(), type: 'expense', amount: o.price, cat: 'ott', memo: `${o.service} ${isYearly(o) ? '연간 ' : ''}구독`, date: b, method: o.method, ottId: o.id });
         o.lastBilled = b;
         added++;
       }
-      m++; if (m > 11) { m = 0; y++; }
     }
   });
   if (added) { store(KEY.tx, txs); store(KEY.ott, otts); }
@@ -758,14 +766,15 @@ function renderHome() {
   }
 
   const active = otts.filter(o => o.active);
-  const monthly = active.reduce((a, o) => a + o.price, 0);
+  const monthly = active.reduce((a, o) => a + ottMonthlyEq(o), 0);
+  const yearly = active.reduce((a, o) => a + ottYearTotal(o), 0);
   const ho = document.getElementById('homeOtt');
   if (!otts.length) {
     ho.innerHTML = `<div class="empty">구독 중인 OTT를 등록하면 결제일마다 자동으로 기록돼요.<br><button class="link-btn" style="margin-top:8px" onclick="switchTab('ott');openOttSheet()">+ OTT 추가하기</button></div>`;
   } else {
     const upcoming = [...active].sort((a, b) => nextBill(a).localeCompare(nextBill(b))).slice(0, 3);
     ho.innerHTML = `
-      <div class="muted" style="font-size:13px;margin:-4px 0 6px;">${active.length}개 구독 · 매달 <b class="out num">${won(monthly)}</b> · 1년 ${won(monthly * 12)}</div>
+      <div class="muted" style="font-size:13px;margin:-4px 0 6px;">${active.length}개 구독 · 월 <b class="out num">${won(monthly)}</b> · 1년 ${won(yearly)}</div>
       ${upcoming.map(o => ottMini(o)).join('')}`;
   }
 
@@ -784,7 +793,7 @@ function ottMini(o) {
       <span class="ott-logo" style="background:${s.color};width:36px;height:36px;font-size:13px;">${esc(s.logo)}</span>
       <div class="meta"><div class="title">${esc(o.service)}<span class="dday ${dd <= 3 ? 'soon' : ''}">${dd === 0 ? '오늘' : 'D-' + dd}</span></div>
       <div class="sub">${nb.slice(5).replace('-', '월 ')}일 결제 예정</div></div>
-      <div class="amt num">${won(o.price)}</div>
+      <div class="amt num">${won(o.price)}<span class="muted" style="font-weight:400;font-size:11.5px;">/${isYearly(o) ? '년' : '월'}</span></div>
     </div>`;
 }
 
@@ -856,11 +865,12 @@ function renderStats() {
 
 function renderOtt() {
   const active = otts.filter(o => o.active);
-  const monthly = active.reduce((a, o) => a + o.price, 0);
+  const monthly = active.reduce((a, o) => a + ottMonthlyEq(o), 0);
   document.getElementById('ottMonthly').textContent = won(monthly);
-  document.getElementById('ottYearly').textContent = won(monthly * 12);
+  document.getElementById('ottYearly').textContent = won(active.reduce((a, o) => a + ottYearTotal(o), 0));
+  const yearlyCnt = active.filter(isYearly).length;
   document.getElementById('ottCountNote').textContent = otts.length
-    ? `구독 ${active.length}개${otts.length > active.length ? ` (일시정지 ${otts.length - active.length}개)` : ''}`
+    ? `구독 ${active.length}개 (매달 ${active.length - yearlyCnt} · 연간 ${yearlyCnt})${otts.length > active.length ? ` · 일시정지 ${otts.length - active.length}개` : ''}${yearlyCnt ? ' · 연간 결제는 월 환산' : ''}`
     : '아직 등록된 구독이 없어요.';
 
   const el = document.getElementById('ottList');
@@ -877,10 +887,10 @@ function renderOtt() {
           <span class="ott-logo" style="background:${s.color}">${esc(s.logo)}</span>
           <div class="meta">
             <div class="title">${esc(o.service)}${o.active ? `<span class="dday ${dd <= 3 ? 'soon' : ''}">${dd === 0 ? '오늘 결제' : 'D-' + dd}</span>` : ''}</div>
-            <div class="sub">${[o.plan, `매달 ${o.day}일`, o.method, o.auto ? '자동기록' : '기록 안 함', o.active ? '' : '일시정지'].filter(Boolean).map(esc).join(' · ')}</div>
+            <div class="sub">${[isYearly(o) ? '연간' : '매달', o.plan, cycleLabel(o), o.method, o.auto ? '자동기록' : '기록 안 함', o.active ? '' : '일시정지'].filter(Boolean).map(esc).join(' · ')}</div>
           </div>
           <div class="right">
-            <div class="price num">${won(o.price)}</div>
+            <div class="price num">${won(o.price)}<span class="muted" style="font-weight:400;font-size:11.5px;">/${isYearly(o) ? '년' : '월'}</span></div>
             <div class="acts">
               <button class="mini" onclick="toggleOtt('${o.id}')">${o.active ? '정지' : '재개'}</button>
               <button class="mini" onclick="openOttSheet('${o.id}')">수정</button>
@@ -979,7 +989,16 @@ function deleteTx() {
 }
 
 /* ================= OTT 시트 ================= */
-let editingOtt = null, ottPick = OTT_SERVICES[0].name;
+let editingOtt = null, ottPick = OTT_SERVICES[0].name, ottCycle = 'month';
+function setOttCycle(c, keepPrice) {
+  ottCycle = c;
+  document.querySelectorAll('#ottCycleSeg button').forEach(b => b.classList.toggle('on', b.dataset.cycle === c));
+  document.getElementById('ottPriceLabel').textContent = c === 'year' ? '연 요금' : '월 요금';
+  document.getElementById('ottStartLabel').textContent = c === 'year' ? '결제일 (매년 이 날짜)' : '결제일 (매달 이 날)';
+  const s = ottSvc(ottPick);
+  document.getElementById('ottPlan').innerHTML = s.plans.map((p, i) => `<option value="${i}">${esc(p[0])} · ${won(planPrice(p, c))}${c === 'year' ? '/년' : '/월'}</option>`).join('');
+  if (!keepPrice) onOttPlan();
+}
 function renderPresets() {
   document.getElementById('ottPresets').innerHTML = OTT_SERVICES.map(s =>
     `<button class="preset ${s.name === ottPick ? 'on' : ''}" onclick="pickOtt('${esc(s.name)}')"><span class="ott-logo" style="background:${s.color}">${esc(s.logo)}</span>${esc(s.name)}</button>`).join('');
@@ -990,14 +1009,14 @@ function pickOtt(name) {
   const custom = !s.plans.length;
   document.getElementById('ottNameField').classList.toggle('hidden', !custom);
   document.getElementById('ottPlanField').classList.toggle('hidden', custom);
-  document.getElementById('ottPlan').innerHTML = s.plans.map(([p, price], i) => `<option value="${i}">${esc(p)} · ${won(price)}</option>`).join('');
+  setOttCycle(ottCycle, true);
   if (custom) document.getElementById('ottPrice').value = '';
   else onOttPlan();
   renderPresets();
 }
 function onOttPlan() {
   const p = ottSvc(ottPick).plans[parseInt(document.getElementById('ottPlan').value, 10) || 0];
-  if (p) document.getElementById('ottPrice').value = p[1].toLocaleString('ko-KR');
+  if (p) document.getElementById('ottPrice').value = planPrice(p, ottCycle).toLocaleString('ko-KR');
 }
 function openOttSheet(id) {
   editingOtt = id ? otts.find(o => o.id === id) : null;
@@ -1005,10 +1024,13 @@ function openOttSheet(id) {
   document.getElementById('ottSheetTitle').textContent = o ? 'OTT 구독 수정' : 'OTT 구독 추가';
   document.getElementById('ottDelete').classList.toggle('hidden', !o);
   const known = o && OTT_SERVICES.some(s => s.name === o.service && s.plans.length);
+  ottCycle = o && isYearly(o) ? 'year' : 'month';
   pickOtt(o ? (known ? o.service : '직접 입력') : OTT_SERVICES[0].name);
   if (o) {
     if (known) {
       const idx = ottSvc(o.service).plans.findIndex(p => p[0] === o.plan);
+      if (idx >= 0) document.getElementById('ottPlan').value = idx;
+      setOttCycle(ottCycle, true);
       if (idx >= 0) document.getElementById('ottPlan').value = idx;
     } else document.getElementById('ottName').value = o.service;
     document.getElementById('ottPrice').value = o.price.toLocaleString('ko-KR');
@@ -1024,19 +1046,22 @@ function saveOtt() {
   const service = custom ? document.getElementById('ottName').value.trim() : s.name;
   if (!service) { toast('서비스 이름을 입력해주세요'); return; }
   const price = parseAmount(document.getElementById('ottPrice').value);
-  if (!price) { toast('월 요금을 입력해주세요'); return; }
+  if (!price) { toast(ottCycle === 'year' ? '연 요금을 입력해주세요' : '월 요금을 입력해주세요'); return; }
   const startDate = document.getElementById('ottStart').value || today();
   const plan = custom ? '' : (s.plans[parseInt(document.getElementById('ottPlan').value, 10) || 0] || [''])[0];
   const data = {
-    service, plan, price, startDate, day: parseInt(startDate.slice(8, 10), 10),
+    service, plan, price, cycle: ottCycle, startDate, day: parseInt(startDate.slice(8, 10), 10),
     method: document.getElementById('ottMethod').value,
     auto: document.getElementById('ottAuto').checked
   };
   if (editingOtt) {
     const o = editingOtt;
     // 결제일·시작일을 바꾸면 이미 기록된 결제 이후부터 새 일정으로 기록
+    const changedSchedule = o.startDate !== data.startDate || (o.cycle || 'month') !== data.cycle;
     Object.assign(o, data);
     if (o.lastBilled && o.lastBilled < o.startDate) o.lastBilled = null;
+    // 결제 주기를 바꾸면 오늘 이전 결제는 다시 기록하지 않음
+    if (changedSchedule && o.lastBilled) { const lb = lastBillBefore(o, today()); if (lb && lb > o.lastBilled) o.lastBilled = lb; }
   } else {
     otts.push({ id: uid(), ...data, active: true, lastBilled: null });
   }
@@ -1059,7 +1084,7 @@ function toggleOtt(id) {
   // 재개하면 정지 기간의 결제는 소급 기록하지 않음
   if (o.active) {
     const lb = lastBillBefore(o, today());
-    if (!o.lastBilled || lb > o.lastBilled) o.lastBilled = lb;
+    if (lb && (!o.lastBilled || lb > o.lastBilled)) o.lastBilled = lb;
   }
   store(KEY.ott, otts);
   runOttBilling();
